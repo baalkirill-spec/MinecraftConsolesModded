@@ -113,6 +113,7 @@ public:
 	float gamma;
 	bool showFpsOverlay;
 	wstring customSkinPath;
+	int windowedResolution;
 
 	void init();	// 4J added
     Options(Minecraft *minecraft, File workingDirectory);
@@ -130,6 +131,9 @@ private:
 	float readFloat(wstring string);
 public:
 	void save();
+	wstring getWindowedResolutionMessage() const;
+	bool cycleWindowedResolution(int dir);
+	bool applyWindowedResolution() const;
 
 	bool isCloudsOn();
 };

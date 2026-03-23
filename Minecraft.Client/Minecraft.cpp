@@ -121,6 +121,11 @@ int iToolTipOffset = 85;
 ResourceLocation Minecraft::DEFAULT_FONT_LOCATION = ResourceLocation(TN_DEFAULT_FONT);
 ResourceLocation Minecraft::ALT_FONT_LOCATION = ResourceLocation(TN_ALT_FONT);
 
+namespace
+{
+	constexpr int64_t kFpsUpdateIntervalNs = 250000000LL;
+}
+
 
 Minecraft::Minecraft(Component *mouseComponent, Canvas *parent, MinecraftApplet *minecraftApplet, int width, int height, bool fullscreen)
 {
@@ -344,6 +349,7 @@ void Minecraft::init()
 	textures = new Textures(skins, options);
 	customSkinManager = new CustomSkinManager(workingDirectory);
 	customSkinManager->initialize(options->customSkinPath);
+	options->applyWindowedResolution();
 	//renderLoadingScreen();
 
 	font = new Font(options, L"font/Default.png", textures, false, &DEFAULT_FONT_LOCATION, 23, 20, 8, 8, SFontData::Codepoints);
@@ -650,7 +656,7 @@ void Minecraft::run()
 		return;
 	}
 
-	int64_t lastTime = System::currentTimeMillis();
+	int64_t lastTime = System::nanoTime();
 	int frames = 0;
 
 	while (running)
@@ -755,11 +761,12 @@ void Minecraft::run()
 		frames++;
 		pause = !isClientSide() && screen != nullptr && screen->isPauseScreen();
 
-		while (System::currentTimeMillis() >= lastTime + 1000)
+		const int64_t fpsNow = System::nanoTime();
+		if (fpsNow - lastTime >= kFpsUpdateIntervalNs)
 		{
-			updateFpsStrings(frames, Chunk::updates, 1000000000LL);
+			updateFpsStrings(frames, Chunk::updates, fpsNow - lastTime);
 			Chunk::updates = 0;
-			lastTime += 1000;
+			lastTime = fpsNow;
 			frames = 0;
 		}
 		/*
@@ -2067,6 +2074,20 @@ void Minecraft::run_middle()
 			Display::update();
 			PIXEndNamedEvent();
 
+#ifdef _WINDOWS64
+			extern int g_rScreenWidth;
+			extern int g_rScreenHeight;
+			if (g_rScreenWidth > 0 && g_rScreenHeight > 0 &&
+				(g_rScreenWidth != width_phys || g_rScreenHeight != height_phys))
+			{
+				width_phys = g_rScreenWidth;
+				height_phys = g_rScreenHeight;
+				width = RenderManager.IsWidescreen() ? g_rScreenWidth : (g_rScreenWidth * 3) / 4;
+				height = g_rScreenHeight;
+				resize(width, height);
+			}
+#endif
+
 			//        checkScreenshot();	// 4J - removed
 
 			/* 4J - removed
@@ -2093,7 +2114,7 @@ void Minecraft::run_middle()
 
 #ifndef _CONTENT_PACKAGE
 			const int64_t fpsNow = System::nanoTime();
-			if (fpsNow - lastTime >= 1000000000LL)
+			if (fpsNow - lastTime >= kFpsUpdateIntervalNs)
 			{
 				MemSect(31);
 				updateFpsStrings(frames, Chunk::updates, fpsNow - lastTime);
@@ -2279,7 +2300,7 @@ void Minecraft::resize(int width, int height)
 		ScreenSizeCalculator ssc(options, width, height);
 		int screenWidth = ssc.getWidth();
 		int screenHeight = ssc.getHeight();
-		//        screen->init(this, screenWidth, screenHeight);	// 4J - TODO - put back in
+		screen->init(this, screenWidth, screenHeight);
 	}
 }
 

@@ -3,6 +3,7 @@
 #include "Button.h"
 #include "ChatScreen.h"
 #include "GuiParticles.h"
+#include "Minecraft.h"
 #include "Tesselator.h"
 #include "Textures.h"
 #include "..\Minecraft.World\SoundTypes.h"
@@ -30,6 +31,13 @@ void Screen::render(int xm, int ym, float a)
 		if ( button )
         	button->render(minecraft, xm, ym);
     }
+
+	if (minecraft != nullptr && minecraft->options != nullptr && minecraft->options->showFpsOverlay &&
+		(minecraft->level == nullptr || minecraft->player == nullptr))
+	{
+		const int overlayX = width - font->width(minecraft->fpsOverlayString) - 6;
+		drawString(font, minecraft->fpsOverlayString, overlayX, 6, 0xe0e0e0);
+	}
 }
 
 void Screen::keyPressed(wchar_t eventCharacter, int eventKey)
@@ -296,8 +304,6 @@ void Screen::renderBackground(int vo)
 
 void Screen::renderDirtBackground(int vo)
 {
-	// 4J Unused
-#if 0
     glDisable(GL_LIGHTING);
     glDisable(GL_FOG);
     Tesselator *t = Tesselator::getInstance();
@@ -311,7 +317,9 @@ void Screen::renderDirtBackground(int vo)
     t->vertexUV(static_cast<float>(width), static_cast<float>(0), static_cast<float>(0), static_cast<float>(width / s), static_cast<float>(0 + vo));
     t->vertexUV(static_cast<float>(0), static_cast<float>(0), static_cast<float>(0), static_cast<float>(0), static_cast<float>(0 + vo));
     t->end();
-#endif
+
+	fillGradient(0, 0, width, height / 2, 0x40101010, 0x10101010);
+	fillGradient(0, height / 2, width, height, 0x10101010, 0x40101010);
 }
 
 bool Screen::isPauseScreen()

@@ -3,6 +3,7 @@
 #include "ModInfo.h"
 #include "..\\Minecraft.World\\File.h"
 
+#include <unordered_map>
 #include <vector>
 
 class ModManager
@@ -11,6 +12,7 @@ public:
 	explicit ModManager(const File& workingDirectory);
 
 	void initialize();
+	void refresh();
 	const std::vector<ModInfo>& getMods() const;
 	const std::vector<ModInfo::DataDefinition>& getDataDefinitions() const;
 	const File& getModsDirectory() const;
@@ -20,6 +22,7 @@ private:
 	File m_modsDirectory;
 	std::vector<ModInfo> m_mods;
 	std::vector<ModInfo::DataDefinition> m_dataDefinitions;
+	mutable std::unordered_map<std::wstring, std::wstring> m_assetOverrideCache;
 
 	void ensureModsDirectory() const;
 	void scanMods();
@@ -36,6 +39,7 @@ private:
 	static bool ValidateResourcePathSegment(const std::wstring& input);
 	static bool ValidateDefinitionPath(const std::wstring& input);
 	static std::wstring NormalizePathSeparators(const std::wstring& input);
+	static std::wstring NormalizeAssetOverridePath(const std::wstring& input);
 	static std::wstring TrimAsciiWhitespace(const std::string& text);
 	static bool EndsWithIgnoreCase(const std::wstring& value, const std::wstring& suffix);
 };

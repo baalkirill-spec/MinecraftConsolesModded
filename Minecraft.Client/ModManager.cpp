@@ -138,6 +138,12 @@ void ModManager::initialize()
 	scanMods();
 }
 
+void ModManager::refresh()
+{
+	ensureModsDirectory();
+	scanMods();
+}
+
 const std::vector<ModInfo>& ModManager::getMods() const
 {
 	return m_mods;
@@ -155,7 +161,19 @@ const File& ModManager::getModsDirectory() const
 
 std::wstring ModManager::resolveFolderAssetOverride(const std::wstring& relativePath) const
 {
-	const std::wstring normalizedRelativePath = NormalizePathSeparators(relativePath);
+	const std::wstring normalizedRelativePath = NormalizeAssetOverridePath(relativePath);
+	if (normalizedRelativePath.empty())
+	{
+		return L"";
+	}
+
+	const std::wstring cacheKey = ToLowerCopy(normalizedRelativePath);
+	const auto cacheIt = m_assetOverrideCache.find(cacheKey);
+	if (cacheIt != m_assetOverrideCache.end())
+	{
+		return cacheIt->second;
+	}
+
 	static const std::wstring candidatePrefixes[] =
 	{
 		L"",
@@ -176,11 +194,14 @@ std::wstring ModManager::resolveFolderAssetOverride(const std::wstring& relative
 				File candidate(assetRoot, relativeCandidate);
 				if (candidate.exists() && candidate.isFile())
 				{
-					return candidate.getPath();
+					const std::wstring resolvedPath = candidate.getPath();
+					m_assetOverrideCache[cacheKey] = resolvedPath;
+					return resolvedPath;
 				}
 			}
 		}
 	}
+	m_assetOverrideCache[cacheKey] = L"";
 	return L"";
 }
 
@@ -197,6 +218,7 @@ void ModManager::scanMods()
 {
 	m_mods.clear();
 	m_dataDefinitions.clear();
+	m_assetOverrideCache.clear();
 	std::vector<File*>* files = m_modsDirectory.listFiles();
 	if (files == nullptr)
 	{
@@ -781,6 +803,23 @@ std::wstring ModManager::NormalizePathSeparators(const std::wstring& input)
 {
 	std::wstring output = input;
 	std::replace(output.begin(), output.end(), L'\\', L'/');
+	return output;
+}
+
+std::wstring ModManager::NormalizeAssetOverridePath(const std::wstring& input)
+{
+	std::wstring output = NormalizePathSeparators(input);
+
+	while (!output.empty() && (output.front() == L'/' || output.front() == L'\\'))
+	{
+		output.erase(output.begin());
+	}
+
+	if (output.size() > 4 && ToLowerCopy(output.substr(0, 4)) == L"res/")
+	{
+		output = output.substr(4);
+	}
+
 	return output;
 }
 

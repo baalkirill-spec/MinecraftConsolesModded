@@ -1070,7 +1070,7 @@ void Gui::render(float a, bool mouseFree, int xMouse, int yMouse)
             lines.push_back(ClientConstants::VERSION_STRING);
             lines.push_back(ClientConstants::BRANCH_STRING);
         }
-        if ((minecraft->options->showFpsOverlay || minecraft->options->renderDebug) && minecraft->player != nullptr && minecraft->level != nullptr)
+        if (minecraft->options->showFpsOverlay || minecraft->options->renderDebug)
         {
             lines.push_back(minecraft->options->renderDebug ? minecraft->fpsString : minecraft->fpsOverlayString);
         }

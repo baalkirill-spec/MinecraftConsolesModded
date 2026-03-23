@@ -18,6 +18,36 @@ namespace
 {
 	constexpr int kMinViewDistance = -2;
 	constexpr int kMaxViewDistance = 3;
+	struct WindowedResolutionPreset
+	{
+		int width;
+		int height;
+		const wchar_t* label;
+	};
+
+	constexpr WindowedResolutionPreset kWindowedResolutionPresets[] =
+	{
+		{ 0, 0, L"Current" },
+		{ 1280, 720, L"1280x720" },
+		{ 1600, 900, L"1600x900" },
+		{ 1920, 1080, L"1920x1080" },
+	};
+
+	int ClampWindowedResolutionIndex(int value)
+	{
+		const int maxIndex = static_cast<int>(sizeof(kWindowedResolutionPresets) / sizeof(kWindowedResolutionPresets[0])) - 1;
+		if (value < 0) return 0;
+		if (value > maxIndex) return maxIndex;
+		return value;
+	}
+
+	int WrapWindowedResolutionIndex(int value)
+	{
+		const int count = static_cast<int>(sizeof(kWindowedResolutionPresets) / sizeof(kWindowedResolutionPresets[0]));
+		while (value < 0) value += count;
+		while (value >= count) value -= count;
+		return value;
+	}
 
 	int ClampViewDistance(int value)
 	{
@@ -216,6 +246,7 @@ void Options::init()
 	gamma = 0.0f;
 	showFpsOverlay = false;
 	customSkinPath = L"custom_skin.png";
+	windowedResolution = 0;
 }
 
 Options::Options(Minecraft *minecraft, File workingDirectory)
@@ -223,6 +254,7 @@ Options::Options(Minecraft *minecraft, File workingDirectory)
 	init();
 	this->minecraft = minecraft;
 	optionsFile = File(workingDirectory, L"options.txt");
+	load();
 }
 
 Options::Options()
@@ -532,6 +564,7 @@ void Options::load()
 		if (cmds[0] == L"clouds") renderClouds = (cmds[1] == L"true");
 		if (cmds[0] == L"showFpsOverlay") showFpsOverlay = (cmds[1] == L"true");
 		if (cmds[0] == L"customSkinPath") customSkinPath = cmds[1];
+		if (cmds[0] == L"windowedResolution") windowedResolution = _fromString<int>(cmds[1]);
 		if (cmds[0] == L"skin") skin = cmds[1];
 		if (cmds[0] == L"lastServer") lastMpIp = cmds[1];
 
@@ -574,6 +607,8 @@ void Options::load()
 
 	if (difficulty < 0) difficulty = 0;
 	if (difficulty > 3) difficulty = 3;
+
+	windowedResolution = ClampWindowedResolutionIndex(windowedResolution);
 }
 
 float Options::readFloat(wstring string)
@@ -607,6 +642,7 @@ void Options::save()
 	dos.writeChars(renderClouds ? L"clouds:true\n" : L"clouds:false\n");
 	dos.writeChars(showFpsOverlay ? L"showFpsOverlay:true\n" : L"showFpsOverlay:false\n");
 	dos.writeChars(L"customSkinPath:" + customSkinPath + L"\n");
+	dos.writeChars(L"windowedResolution:" + std::to_wstring(windowedResolution) + L"\n");
 	dos.writeChars(L"skin:" + skin + L"\n");
 	dos.writeChars(L"lastServer:" + lastMpIp + L"\n");
 
@@ -621,4 +657,36 @@ void Options::save()
 bool Options::isCloudsOn()
 {
 	return viewDistance < 2 && renderClouds;
+}
+
+wstring Options::getWindowedResolutionMessage() const
+{
+	return std::wstring(L"Window Size: ") + kWindowedResolutionPresets[ClampWindowedResolutionIndex(windowedResolution)].label;
+}
+
+bool Options::cycleWindowedResolution(int dir)
+{
+	const int newValue = WrapWindowedResolutionIndex(windowedResolution + dir);
+	if (newValue == windowedResolution)
+	{
+		return false;
+	}
+
+	windowedResolution = newValue;
+	return applyWindowedResolution();
+}
+
+bool Options::applyWindowedResolution() const
+{
+#ifdef _WINDOWS64
+	extern bool SetWindowedClientSize(int clientWidth, int clientHeight);
+	const WindowedResolutionPreset& preset = kWindowedResolutionPresets[ClampWindowedResolutionIndex(windowedResolution)];
+	if (preset.width <= 0 || preset.height <= 0)
+	{
+		return true;
+	}
+	return SetWindowedClientSize(preset.width, preset.height);
+#else
+	return false;
+#endif
 }
