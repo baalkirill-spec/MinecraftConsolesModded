@@ -53,6 +53,20 @@
 #include "TextureAtlas.h"
 #include "Common/PostProcesser.h"
 
+namespace
+{
+	bool ShouldApplyViewBobbing(const std::shared_ptr<LocalPlayer>& player, bool noLegAnim, bool noBobbingAnim)
+	{
+		return player != nullptr &&
+			app.GetGameSettings(player->GetXboxPad(), eGameSetting_ViewBob) &&
+			!player->abilities.flying &&
+			player->riding == nullptr &&
+			!player->isSleeping() &&
+			!noLegAnim &&
+			!noBobbingAnim;
+	}
+}
+
 bool GameRenderer::anaglyph3d = false;
 int GameRenderer::anaglyphPass = 0;
 
@@ -445,6 +459,7 @@ void GameRenderer::bobView(float a)
 	if (!mc->cameraTargetPlayer->instanceof(eTYPE_LIVINGENTITY)) return;
 
 	shared_ptr<Player> player = dynamic_pointer_cast<Player>(mc->cameraTargetPlayer);
+	if (player == nullptr || player->riding != nullptr || player->isSleeping()) return;
 
 	float wda = player->walkDist - player->walkDistO;
 	float b = -(player->walkDist + wda * a);
@@ -664,8 +679,9 @@ void GameRenderer::setupCamera(float a, int eye)
 
 	bool bNoLegAnim =(mc->player->getAnimOverrideBitmask()&(1<<HumanoidModel::eAnim_NoLegAnim))!=0;
 	bool bNoBobbingAnim =(mc->player->getAnimOverrideBitmask()&(1<<HumanoidModel::eAnim_NoBobbing))!=0;
+	const shared_ptr<LocalPlayer> activeLocalPlayer = mc->cameraTargetPlayer->instanceof(eTYPE_LOCALPLAYER) ? dynamic_pointer_cast<LocalPlayer>(mc->cameraTargetPlayer) : nullptr;
 
-	if(app.GetGameSettings(mc->player->GetXboxPad(),eGameSetting_ViewBob) && !mc->player->abilities.flying && !bNoLegAnim && !bNoBobbingAnim) bobView(a);
+	if(ShouldApplyViewBobbing(activeLocalPlayer, bNoLegAnim, bNoBobbingAnim)) bobView(a);
 
 	float pt = mc->player->oPortalTime + (mc->player->portalTime - mc->player->oPortalTime) * a;
 	if (pt > 0)
@@ -703,6 +719,7 @@ void GameRenderer::renderItemInHand(float a, int eye)
 
 	// 4J-JEV: I'm fairly confident this method would crash if the cameratarget isnt a local player anyway, but oh well.
 	shared_ptr<LocalPlayer> localplayer = mc->cameraTargetPlayer->instanceof(eTYPE_LOCALPLAYER) ? dynamic_pointer_cast<LocalPlayer>(mc->cameraTargetPlayer) : nullptr;
+	if (localplayer == nullptr) return;
 
 	bool renderHand = true;
 
@@ -746,8 +763,8 @@ void GameRenderer::renderItemInHand(float a, int eye)
 
 	// 4J-PB - changing this to be per player
 	//if (mc->options->bobView) bobView(a);
-	bool bNoLegAnim =(localplayer->getAnimOverrideBitmask()&( (1<<HumanoidModel::eAnim_NoLegAnim) | (1<<HumanoidModel::eAnim_NoBobbing) ))!=0;
-	if(app.GetGameSettings(localplayer->GetXboxPad(),eGameSetting_ViewBob) && !localplayer->abilities.flying && !bNoLegAnim) bobView(a);
+	const bool bDisableViewBobbing = (localplayer->getAnimOverrideBitmask() & ((1<<HumanoidModel::eAnim_NoLegAnim) | (1<<HumanoidModel::eAnim_NoBobbing))) != 0;
+	if(ShouldApplyViewBobbing(localplayer, bDisableViewBobbing, bDisableViewBobbing)) bobView(a);
 
 	// 4J: Skip hand rendering if render hand is off
 	if (renderHand)
@@ -778,7 +795,7 @@ void GameRenderer::renderItemInHand(float a, int eye)
 
 	// 4J-PB - changing this to be per player
 	//if (mc->options->bobView) bobView(a);
-	if(app.GetGameSettings(localplayer->GetXboxPad(),eGameSetting_ViewBob) && !localplayer->abilities.flying && !bNoLegAnim) bobView(a);
+	if(ShouldApplyViewBobbing(localplayer, bDisableViewBobbing, bDisableViewBobbing)) bobView(a);
 }
 
 // 4J - change brought forward from 1.8.2

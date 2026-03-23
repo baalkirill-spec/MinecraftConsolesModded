@@ -14,6 +14,45 @@
 #include "..\\Minecraft.World\\DataOutputStream.h"
 #include "..\\Minecraft.World\\StringHelpers.h"
 
+namespace
+{
+	constexpr int kMinViewDistance = -2;
+	constexpr int kMaxViewDistance = 3;
+
+	int ClampViewDistance(int value)
+	{
+		if (value < kMinViewDistance) return kMinViewDistance;
+		if (value > kMaxViewDistance) return kMaxViewDistance;
+		return value;
+	}
+
+	int WrapViewDistance(int value)
+	{
+		const int range = (kMaxViewDistance - kMinViewDistance) + 1;
+		while (value < kMinViewDistance) value += range;
+		while (value > kMaxViewDistance) value -= range;
+		return value;
+	}
+
+	int ViewDistanceToChunks(int viewDistance)
+	{
+		const int clamped = ClampViewDistance(viewDistance);
+		return clamped >= 0 ? (16 >> clamped) : (16 << (-clamped));
+	}
+
+	std::wstring GetRenderDistanceLabel(Language *language, int viewDistance, const std::wstring renderDistanceNames[])
+	{
+		const int clamped = ClampViewDistance(viewDistance);
+		std::wstring label = language->getElement(clamped >= 0 ? renderDistanceNames[clamped] : renderDistanceNames[0]);
+		for (int i = 0; i < -clamped; ++i)
+		{
+			label += L"+";
+		}
+
+		return label + L" (" + std::to_wstring(ViewDistanceToChunks(clamped)) + L" chunks)";
+	}
+}
+
 // 4J - the Option sub-class used to be an java enumerated type, trying to emulate that functionality here
 const Options::Option Options::Option::options[18] =
 {
@@ -265,16 +304,33 @@ void Options::set(const Options::Option *item, float fVal)
 
 	if (item == Option::RENDER_DISTANCE)
 	{
-		if (fVal < 0.0f) fVal = 0.0f;
-		if (fVal > 3.0f) fVal = 3.0f;
-		viewDistance = static_cast<int>(fVal);
+		const int newViewDistance = ClampViewDistance(static_cast<int>(fVal));
+		if (viewDistance != newViewDistance)
+		{
+			viewDistance = newViewDistance;
+			if (minecraft != nullptr && minecraft->levelRenderer != nullptr)
+			{
+				minecraft->levelRenderer->allChanged();
+			}
+		}
 	}
 }
 
 void Options::toggle(const Options::Option *option, int dir)
 {
 	if (option == Option::INVERT_MOUSE) invertYMouse = !invertYMouse;
-	if (option == Option::RENDER_DISTANCE) viewDistance = (viewDistance + dir) & 3;
+	if (option == Option::RENDER_DISTANCE)
+	{
+		const int newViewDistance = WrapViewDistance(viewDistance + dir);
+		if (viewDistance != newViewDistance)
+		{
+			viewDistance = newViewDistance;
+			if (minecraft != nullptr && minecraft->levelRenderer != nullptr)
+			{
+				minecraft->levelRenderer->allChanged();
+			}
+		}
+	}
 	if (option == Option::GUI_SCALE) guiScale = (guiScale + dir) & 3;
 	if (option == Option::PARTICLES) particles = (particles + dir + 3) % 3;
 
@@ -401,7 +457,7 @@ wstring Options::getMessage(const Options::Option *item)
 	}
 	else if (item == Option::RENDER_DISTANCE)
 	{
-		return caption + language->getElement(RENDER_DISTANCE_NAMES[viewDistance]);
+		return caption + GetRenderDistanceLabel(language, viewDistance, RENDER_DISTANCE_NAMES);
 	}
 	else if (item == Option::DIFFICULTY)
 	{
@@ -505,8 +561,7 @@ void Options::load()
 	if (gamma < 0.0f) gamma = 0.0f;
 	if (gamma > 1.0f) gamma = 1.0f;
 
-	if (viewDistance < 0) viewDistance = 0;
-	if (viewDistance > 3) viewDistance = 3;
+	viewDistance = ClampViewDistance(viewDistance);
 
 	if (guiScale < 0) guiScale = 0;
 	if (guiScale > 3) guiScale = 3;
