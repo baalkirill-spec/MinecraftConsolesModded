@@ -155,12 +155,15 @@ const File& ModManager::getModsDirectory() const
 
 std::wstring ModManager::resolveFolderAssetOverride(const std::wstring& relativePath) const
 {
+	const std::wstring normalizedRelativePath = NormalizePathSeparators(relativePath);
 	static const std::wstring candidatePrefixes[] =
 	{
 		L"",
 		L"textures",
 		L"minecraft",
-		L"minecraft\textures"
+		// Use forward slashes here so the string literal cannot accidentally
+		// introduce escape sequences like '\t' on Windows path segments.
+		L"minecraft/textures"
 	};
 
 	for (auto it = m_mods.rbegin(); it != m_mods.rend(); ++it)
@@ -169,7 +172,7 @@ std::wstring ModManager::resolveFolderAssetOverride(const std::wstring& relative
 		{
 			for (const std::wstring& prefix : candidatePrefixes)
 			{
-				const std::wstring relativeCandidate = prefix.empty() ? relativePath : (prefix + L"\\" + relativePath);
+				const std::wstring relativeCandidate = prefix.empty() ? normalizedRelativePath : (prefix + L"/" + normalizedRelativePath);
 				File candidate(assetRoot, relativeCandidate);
 				if (candidate.exists() && candidate.isFile())
 				{
