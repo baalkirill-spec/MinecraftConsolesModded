@@ -56,6 +56,7 @@ target_link_libraries(Minecraft.Client PRIVATE
   XInput9_1_0
   wsock32
   legacy_stdio_definitions
+  cabinet
   $<$<CONFIG:Debug>: # Debug 4J libraries
     "${CMAKE_CURRENT_SOURCE_DIR}/${PLATFORM_NAME}/4JLibs/libs/4J_Input_d.lib"
     "${CMAKE_CURRENT_SOURCE_DIR}/${PLATFORM_NAME}/4JLibs/libs/4J_Storage_d.lib"

@@ -15,7 +15,7 @@
 #include "..\\Minecraft.World\\StringHelpers.h"
 
 // 4J - the Option sub-class used to be an java enumerated type, trying to emulate that functionality here
-const Options::Option Options::Option::options[17] =
+const Options::Option Options::Option::options[18] =
 {
 	Options::Option(L"options.music", true, false),
 	Options::Option(L"options.sound", true, false),
@@ -34,6 +34,7 @@ const Options::Option Options::Option::options[17] =
 	Options::Option(L"options.gamma", true, false),
 	Options::Option(L"options.renderClouds", false, true),
 	Options::Option(L"options.particles", false, false),
+	Options::Option(L"options.showFps", false, true),
 };
 
 const Options::Option *Options::Option::MUSIC = &Options::Option::options[0];
@@ -53,6 +54,7 @@ const Options::Option *Options::Option::FOV = &Options::Option::options[13];
 const Options::Option *Options::Option::GAMMA = &Options::Option::options[14];
 const Options::Option *Options::Option::RENDER_CLOUDS = &Options::Option::options[15];
 const Options::Option *Options::Option::PARTICLES = &Options::Option::options[16];
+const Options::Option *Options::Option::SHOW_FPS = &Options::Option::options[17];
 
 const Options::Option *Options::Option::getItem(int id)
 {
@@ -173,6 +175,8 @@ void Options::init()
 	particles = 0;
 	fov = 0.0f;
 	gamma = 0.0f;
+	showFpsOverlay = false;
+	customSkinPath = L"custom_skin.png";
 }
 
 Options::Options(Minecraft *minecraft, File workingDirectory)
@@ -272,10 +276,11 @@ void Options::toggle(const Options::Option *option, int dir)
 	if (option == Option::INVERT_MOUSE) invertYMouse = !invertYMouse;
 	if (option == Option::RENDER_DISTANCE) viewDistance = (viewDistance + dir) & 3;
 	if (option == Option::GUI_SCALE) guiScale = (guiScale + dir) & 3;
-	if (option == Option::PARTICLES) particles = (particles + dir) % 3;
+	if (option == Option::PARTICLES) particles = (particles + dir + 3) % 3;
 
-	if (option == Option::VIEW_BOBBING) ((dir == 0) ? bobView = false : bobView = true);
+	if (option == Option::VIEW_BOBBING) bobView = !bobView;
 	if (option == Option::RENDER_CLOUDS) renderClouds = !renderClouds;
+	if (option == Option::SHOW_FPS) showFpsOverlay = !showFpsOverlay;
 
 	if (option == Option::ADVANCED_OPENGL)
 	{
@@ -326,6 +331,7 @@ bool Options::getBooleanValue(const Options::Option *item)
 	if (item == Option::ADVANCED_OPENGL) return advancedOpengl;
 	if (item == Option::AMBIENT_OCCLUSION) return ambientOcclusion;
 	if (item == Option::RENDER_CLOUDS) return renderClouds;
+	if (item == Option::SHOW_FPS) return showFpsOverlay;
 	return false;
 }
 
@@ -333,6 +339,7 @@ wstring Options::getMessage(const Options::Option *item)
 {
 	Language *language = Language::getInstance();
 	wstring caption = language->getElement(item->getCaptionId()) + L": ";
+	if (item == Option::SHOW_FPS) caption = L"FPS Overlay: ";
 
 	if (item->isProgress())
 	{
@@ -467,6 +474,8 @@ void Options::load()
 		if (cmds[0] == L"fancyGraphics") fancyGraphics = (cmds[1] == L"true");
 		if (cmds[0] == L"ao") ambientOcclusion = (cmds[1] == L"true");
 		if (cmds[0] == L"clouds") renderClouds = (cmds[1] == L"true");
+		if (cmds[0] == L"showFpsOverlay") showFpsOverlay = (cmds[1] == L"true");
+		if (cmds[0] == L"customSkinPath") customSkinPath = cmds[1];
 		if (cmds[0] == L"skin") skin = cmds[1];
 		if (cmds[0] == L"lastServer") lastMpIp = cmds[1];
 
@@ -541,6 +550,8 @@ void Options::save()
 	dos.writeChars(L"fancyGraphics:" + wstring(fancyGraphics ? L"true" : L"false") + L"\n");
 	dos.writeChars(ambientOcclusion ? L"ao:true\n" : L"ao:false\n");
 	dos.writeChars(renderClouds ? L"clouds:true\n" : L"clouds:false\n");
+	dos.writeChars(showFpsOverlay ? L"showFpsOverlay:true\n" : L"showFpsOverlay:false\n");
+	dos.writeChars(L"customSkinPath:" + customSkinPath + L"\n");
 	dos.writeChars(L"skin:" + skin + L"\n");
 	dos.writeChars(L"lastServer:" + lastMpIp + L"\n");
 

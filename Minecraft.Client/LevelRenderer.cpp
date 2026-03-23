@@ -2361,70 +2361,72 @@ void LevelRenderer::setDirty(int x0, int y0, int z0, int x1, int y1, int z1, Lev
 	int _y1 = Mth::intFloorDiv(y1, CHUNK_SIZE);
 	int _z1 = Mth::intFloorDiv(z1, CHUNK_XZSIZE);
 
+	const int dirtyChunkCount = (_x1 - _x0 + 1) * (_y1 - _y0 + 1) * (_z1 - _z0 + 1);
+	const bool useDirectDirtyFlags = dirtyChunkCount > 32;
+
+	if (useDirectDirtyFlags)
+	{
+		EnterCriticalSection(&m_csDirtyChunks);
+	}
+
 	for (int x = _x0; x <= _x1; x++)
 	{
 		for (int y = _y0; y <= _y1; y++)
 		{
 			for (int z = _z0; z <= _z1; z++)
 			{
-				//				printf("Setting %d %d %d dirty\n",x,y,z);
 				int index = getGlobalIndexForChunk(x * 16, y * 16, z * 16, level);
-				// Rather than setting the flags directly, add any dirty chunks into a lock free stack - this avoids having to lock m_csDirtyChunks .
-				// These chunks are then added to the global flags in the render update thread.
-				// An XLockFreeQueue actually implements a queue of pointers to its templated type, and I don't want to have to go allocating ints here just to store the
-				// pointer to them in a queue. Hence actually pretending that the int Is a pointer here. Our Index has a a valid range from 0 to something quite big,
-				// but including zero. The lock free queue, since it thinks it is dealing with pointers, uses a nullptr pointer to signify that a Pop hasn't succeeded.
-				// We also want to reserve one special value (of 1 ) for use when multiple chunks not individually listed are made dirty. Therefore adding 2 to our
-				// index value here to move our valid range from 1 to something quite big + 2
 				if( index > -1 )
 				{
 #ifdef _CRITICAL_CHUNKS
-					index += 2;
+					const bool nonCriticalChunk = (((x0 & 15) == 15 && x == _x0) || ((x1 & 15) == 0 && x == _x1))
+						? ((((z0 & 15) == 15 && z == _z0) || ((z1 & 15) == 0 && z == _z1) || ((y0 & 15) == 15 && y == _y0) || ((y1 & 15) == 0 && y == _y1)))
+						: ((((z0 & 15) == 15 && z == _z0) || ((z1 & 15) == 0 && z == _z1)) && (((y0 & 15) == 15 && y == _y0) || ((y1 & 15) == 0 && y == _y1)));
+#endif
 
-					// AP - by the time we reach this function the area passed in has a 1 block border added to it to make sure geometry and lighting is updated correctly.
-					// Some of those blocks will only need lighting updated so it is acceptable to not have those blocks grouped in the deferral system as the mismatch
-					// will hardly be noticable. The blocks that need geometry updated will be adjacent to the original, non-bordered area.
-					// This bit of code will mark a chunk as 'non-critical' if all of the blocks inside it are NOT adjacent to the original area. This has the greatest effect
-					// when digging a single block. Only 6 of the blocks out of the possible 26 are actually adjacent to the original block. The other 20 only need lighting updated.
-					// Note I have noticed a new side effect of this system where it's possible to see into the sides of water but this is acceptable compared to seeing through
-					// the entire landscape.
-					// is the left or right most block just inside this chunk
-					if( ((x0 & 15) == 15 && x == _x0) || ((x1 & 15) == 0 && x == _x1) )
+					if (useDirectDirtyFlags)
 					{
-						// is the front, back, top or bottom most block just inside this chunk
-						if( ((z0 & 15) == 15 && z == _z0) || ((z1 & 15) == 0 && z == _z1) ||
-							((y0 & 15) == 15 && y == _y0) || ((y1 & 15) == 0 && y == _y1))
+						setGlobalChunkFlag(index, CHUNK_FLAG_DIRTY);
+#ifdef _CRITICAL_CHUNKS
+						if (!nonCriticalChunk)
 						{
-							index |= 0x10000000;
+							setGlobalChunkFlag(index, CHUNK_FLAG_CRITICAL);
 						}
+#endif
 					}
 					else
 					{
-						// is the front or back most block just inside this chunk
-						if( ((z0 & 15) == 15 && z == _z0) || ((z1 & 15) == 0 && z == _z1) )
+						// Rather than setting the flags directly, add any dirty chunks into a lock free stack - this avoids having to lock m_csDirtyChunks .
+						// These chunks are then added to the global flags in the render update thread.
+						if( index > -1 )
 						{
-							// is the top or bottom most block just inside this chunk
-							if( ((y0 & 15) == 15 && y == _y0) || ((y1 & 15) == 0 && y == _y1))
+#ifdef _CRITICAL_CHUNKS
+							int stackIndex = index + 2;
+							if (nonCriticalChunk)
 							{
-								index |= 0x10000000;
+								stackIndex |= 0x10000000;
 							}
-						}
-					}
-
-					dirtyChunksLockFreeStack.Push((int *)(index));
+							dirtyChunksLockFreeStack.Push((int *)(stackIndex));
 #else
-					dirtyChunksLockFreeStack.Push((int *)(index + 2));
+							dirtyChunksLockFreeStack.Push((int *)(index + 2));
 #endif
 
 #ifdef _XBOX
-					PIXSetMarker(0,"Setting chunk %d %d %d dirty",x * 16,y * 16,z * 16);
+							PIXSetMarker(0,"Setting chunk %d %d %d dirty",x * 16,y * 16,z * 16);
 #else
-					PIXSetMarkerDeprecated(0,"Setting chunk %d %d %d dirty",x * 16,y * 16,z * 16);
+							PIXSetMarkerDeprecated(0,"Setting chunk %d %d %d dirty",x * 16,y * 16,z * 16);
 #endif
+						}
+					}
 				}
-				//				setGlobalChunkFlag(x * 16, y * 16, z * 16, level, CHUNK_FLAG_DIRTY);
 			}
 		}
+	}
+
+	if (useDirectDirtyFlags)
+	{
+		LeaveCriticalSection(&m_csDirtyChunks);
+		dirtyChunksLockFreeStack.Push((int *)1);
 	}
 	//	LeaveCriticalSection(&m_csDirtyChunks);
 }

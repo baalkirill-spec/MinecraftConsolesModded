@@ -14,6 +14,8 @@
 #include "HumanoidModel.h"
 #include "Options.h"
 #include "TexturePackRepository.h"
+#include "ModManager.h"
+#include "CustomSkinManager.h"
 #include "StatsCounter.h"
 #include "EntityRenderDispatcher.h"
 #include "TileEntityRenderDispatcher.h"
@@ -168,6 +170,8 @@ Minecraft::Minecraft(Component *mouseComponent, Canvas *parent, MinecraftApplet 
 	soundEngine = new SoundEngine();
 	mouseHandler = nullptr;
 	skins = nullptr;
+	modManager = nullptr;
+	customSkinManager = nullptr;
 	workingDirectory = File(L"");
 	levelSource = nullptr;
 	stats[0] = nullptr;
@@ -184,6 +188,8 @@ Minecraft::Minecraft(Component *mouseComponent, Canvas *parent, MinecraftApplet 
 	//lastTickTime = System::currentTimeMillis();
 	recheckPlayerIn = 0;
 	running = true;
+	fpsString = L"0 fps (0 chunk updates)";
+	fpsOverlayString = L"0 FPS | 0.00 ms | 0 chunk updates";
 	unoccupiedQuadrant = -1;
 
 	Stats::init();
@@ -331,9 +337,13 @@ void Minecraft::init()
 	levelSource = new McRegionLevelStorageSource(File(workingDirectory, L"saves"));
 	//        levelSource = new MemoryLevelStorageSource();
 	options = new Options(this, workingDirectory);
+	modManager = new ModManager(workingDirectory);
+	modManager->initialize();
 	skins = new TexturePackRepository(workingDirectory, this);
 	skins->addDebugPacks();
 	textures = new Textures(skins, options);
+	customSkinManager = new CustomSkinManager(workingDirectory);
+	customSkinManager->initialize(options->customSkinPath);
 	//renderLoadingScreen();
 
 	font = new Font(options, L"font/Default.png", textures, false, &DEFAULT_FONT_LOCATION, 23, 20, 8, 8, SFontData::Codepoints);
@@ -747,7 +757,7 @@ void Minecraft::run()
 
 		while (System::currentTimeMillis() >= lastTime + 1000)
 		{
-			fpsString = std::to_wstring(frames) + L" fps (" + std::to_wstring(Chunk::updates) + L" chunk updates)";
+			updateFpsStrings(frames, Chunk::updates, 1000000000LL);
 			Chunk::updates = 0;
 			lastTime += 1000;
 			frames = 0;
@@ -1039,6 +1049,7 @@ shared_ptr<MultiplayerLocalPlayer> Minecraft::createExtraLocalPlayer(int idx, co
 		// Moved the creation of these into the main thread, before level launch
 		//localitemInHandRenderers[idx] = new ItemInHandRenderer(this);
 		localplayers[idx] = localgameModes[idx]->createPlayer(level);
+		applyConfiguredCustomSkin(localplayers[idx]);
 
 		PlayerUID playerXUIDOffline = INVALID_XUID;
 		PlayerUID playerXUIDOnline = INVALID_XUID;
@@ -2084,7 +2095,7 @@ void Minecraft::run_middle()
 			while (System::nanoTime() >= lastTime + 1000000000)
 			{
 				MemSect(31);
-				fpsString = std::to_wstring(frames) + L" fps (" + std::to_wstring(Chunk::updates) + L" chunk updates)";
+				updateFpsStrings(frames, Chunk::updates, 1000000000LL);
 				MemSect(0);
 				Chunk::updates = 0;
 				lastTime += 1000000000;
@@ -2129,6 +2140,23 @@ void Minecraft::emergencySave()
 	AABB::clearPool();
 	Vec3::clearPool();
 	setLevel(nullptr);
+}
+
+void Minecraft::updateFpsStrings(int frameCount, int chunkUpdateCount, int64_t elapsedNs)
+{
+	fpsString = std::to_wstring(frameCount) + L" fps (" + std::to_wstring(chunkUpdateCount) + L" chunk updates)";
+	const double averageFrameMs = frameCount > 0 ? static_cast<double>(elapsedNs) / static_cast<double>(frameCount) / 1000000.0 : 0.0;
+	wchar_t buffer[128];
+	swprintf(buffer, 128, L"%d FPS | %.2f ms | %d chunk updates", frameCount, averageFrameMs, chunkUpdateCount);
+	fpsOverlayString = buffer;
+}
+
+void Minecraft::applyConfiguredCustomSkin(const std::shared_ptr<Player>& player)
+{
+	if (customSkinManager != nullptr)
+	{
+		customSkinManager->applyToPlayer(player);
+	}
 }
 
 void Minecraft::renderFpsMeter(int64_t tickTime)
@@ -3952,6 +3980,10 @@ void Minecraft::tick(bool bFirst, bool bUpdateTextures)
 					if (Keyboard.getEventKey() == Keyboard.KEY_F3) {
 						options.renderDebug = !options.renderDebug;
 					}
+					if (Keyboard.getEventKey() == Keyboard.KEY_F4) {
+						options.showFpsOverlay = !options.showFpsOverlay;
+						options.save();
+					}
 					if (Keyboard.getEventKey() == Keyboard.KEY_F5) {
 						options.thirdPersonView = !options.thirdPersonView;
 					}
@@ -4394,6 +4426,7 @@ void Minecraft::setLevel(MultiPlayerLevel *level, int message /*=-1*/, shared_pt
 			gameMode->initPlayer(player);
 
 			player->SetXboxPad(iPrimaryPlayer);
+			applyConfiguredCustomSkin(player);
 
 			for(int i=0;i<XUSER_MAX_COUNT;i++)
 			{
@@ -4588,6 +4621,7 @@ void Minecraft::respawnPlayer(int iPad, int dimension, int newEntityId)
 	player->m_iScreenSection = iTempScreenSection;
 	player->setPlayerIndex( localPlayer->getPlayerIndex() );
 	player->setCustomSkin(localPlayer->getCustomSkin());
+	applyConfiguredCustomSkin(player);
 	player->setPlayerDefaultSkin( skin );
 	player->setCustomCape(localPlayer->getCustomCape());
 	player->m_sessionTimeStart = localPlayer->m_sessionTimeStart;

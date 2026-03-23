@@ -21,6 +21,8 @@ class SoundEngine;
 class MinecraftApplet;
 class MouseHandler;
 class TexturePackRepository;
+class ModManager;
+class CustomSkinManager;
 class File;
 class LevelStorageSource;
 class StatsCounter;
@@ -165,6 +167,8 @@ public:
 	MouseHandler *mouseHandler;
 public:
 	TexturePackRepository *skins;
+	ModManager *modManager;
+	CustomSkinManager *customSkinManager;
 	File workingDirectory;
 private:
 	LevelStorageSource *levelSource;
@@ -212,6 +216,7 @@ public:
 	void destroy();
 	volatile bool running;
 	wstring fpsString;
+	wstring fpsOverlayString;
 	void run();
 	// 4J-PB - split the run into 3 parts so we can run it from our xbox game loop
 	static Minecraft *GetInstance();
@@ -233,6 +238,8 @@ private:
 	int64_t lastTimer;
 
 	void renderFpsMeter(int64_t tickTime);
+	void updateFpsStrings(int frameCount, int chunkUpdateCount, int64_t elapsedNs);
+	void applyConfiguredCustomSkin(const std::shared_ptr<Player>& player);
 public:
 	void stop();
 	// 4J removed

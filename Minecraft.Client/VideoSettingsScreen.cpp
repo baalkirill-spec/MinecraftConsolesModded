@@ -18,20 +18,23 @@ void VideoSettingsScreen::init()
     Language *language = Language::getInstance();
     this->title = language->getElement(L"options.videoTitle");
 
-	// Добавили FOV в список
-	const Options::Option *items[9] = {
+	const Options::Option *items[] = {
 		Options::Option::GRAPHICS,
 		Options::Option::RENDER_DISTANCE,
 		Options::Option::FOV,
+		Options::Option::GAMMA,
 		Options::Option::AMBIENT_OCCLUSION,
-		Options::Option::FRAMERATE_LIMIT,
-		Options::Option::ANAGLYPH,
+		Options::Option::RENDER_CLOUDS,
 		Options::Option::VIEW_BOBBING,
+		Options::Option::PARTICLES,
 		Options::Option::GUI_SCALE,
+		Options::Option::FRAMERATE_LIMIT,
+		Options::Option::SHOW_FPS,
 		Options::Option::ADVANCED_OPENGL
 	};
 
-	for (int position = 0; position < 9; position++)
+	const int itemCount = static_cast<int>(sizeof(items) / sizeof(items[0]));
+	for (int position = 0; position < itemCount; position++)
 	{
 		const Options::Option *item = items[position];
         if (!item->isProgress())
@@ -60,7 +63,7 @@ void VideoSettingsScreen::init()
     buttons.push_back(new Button(
         200,
         width / 2 - 100,
-        height / 6 + 24 * 8,
+        height / 6 + 24 * ((itemCount + 1) >> 1) + 12,
         language->getElement(L"gui.done")
     ));
 }
