@@ -56,14 +56,26 @@ const File& ModManager::getModsDirectory() const
 
 std::wstring ModManager::resolveFolderAssetOverride(const std::wstring& relativePath) const
 {
+	static const std::wstring candidatePrefixes[] =
+	{
+		L"",
+		L"textures",
+		L"minecraft",
+		L"minecraft\textures"
+	};
+
 	for (auto it = m_mods.rbegin(); it != m_mods.rend(); ++it)
 	{
 		for (const std::wstring& assetRoot : it->assetRoots)
 		{
-			File candidate(assetRoot, relativePath);
-			if (candidate.exists() && candidate.isFile())
+			for (const std::wstring& prefix : candidatePrefixes)
 			{
-				return candidate.getPath();
+				const std::wstring relativeCandidate = prefix.empty() ? relativePath : (prefix + L"\\" + relativePath);
+				File candidate(assetRoot, relativeCandidate);
+				if (candidate.exists() && candidate.isFile())
+				{
+					return candidate.getPath();
+				}
 			}
 		}
 	}
@@ -138,6 +150,9 @@ bool ModManager::loadFolderMod(const File& path, ModInfo& outInfo) const
 	outInfo.name = path.getName();
 	outInfo.version = L"0.0.0";
 	outInfo.description = L"Folder mod without mod.json";
+
+	// Legacy root-first lookup keeps simple phase-1 folder mods working even before a full resource pack style mount exists.
+	outInfo.assetRoots.push_back(path.getPath());
 
 	const File manifest(path, kManifestFileName);
 	if (manifest.exists() && manifest.isFile())
