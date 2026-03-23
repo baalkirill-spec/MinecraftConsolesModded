@@ -2352,7 +2352,12 @@ void LevelRenderer::setDirty(int x0, int y0, int z0, int x1, int y1, int z1, Lev
 {
 	// 4J - level is passed if this is coming from setTilesDirty, which could come from when connection is being ticked outside of normal level tick, and player won't
 	// be set up
-	if( level == nullptr ) level = this->level[mc->player->GetXboxPad()];
+	if( level == nullptr )
+	{
+		if( mc == nullptr || mc->player == nullptr ) return;
+		level = this->level[mc->player->GetXboxPad()];
+		if( level == nullptr ) return;
+	}
 	//	EnterCriticalSection(&m_csDirtyChunks);
 	int _x0 = Mth::intFloorDiv(x0, CHUNK_XZSIZE);
 	int _y0 = Mth::intFloorDiv(y0, CHUNK_SIZE);
@@ -2361,7 +2366,7 @@ void LevelRenderer::setDirty(int x0, int y0, int z0, int x1, int y1, int z1, Lev
 	int _y1 = Mth::intFloorDiv(y1, CHUNK_SIZE);
 	int _z1 = Mth::intFloorDiv(z1, CHUNK_XZSIZE);
 
-	const int dirtyChunkCount = (_x1 - _x0 + 1) * (_y1 - _y0 + 1) * (_z1 - _z0 + 1);
+	const int64_t dirtyChunkCount = static_cast<int64_t>(_x1 - _x0 + 1) * static_cast<int64_t>(_y1 - _y0 + 1) * static_cast<int64_t>(_z1 - _z0 + 1);
 	const bool useDirectDirtyFlags = dirtyChunkCount > 32;
 
 	if (useDirectDirtyFlags)
@@ -3793,4 +3798,3 @@ int LevelRenderer::checkAllPresentChunks(bool *faultFound)
 	}
 	return presentCount;
 }
-

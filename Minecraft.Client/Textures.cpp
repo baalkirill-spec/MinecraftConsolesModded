@@ -1389,21 +1389,6 @@ BufferedImage *Textures::readImage(TEXTURE_NAME texId, const wstring& name)	// 4
 {
 	BufferedImage *img=nullptr;
 	MemSect(32);
-	if (Minecraft::GetInstance() != nullptr && Minecraft::GetInstance()->modManager != nullptr)
-	{
-		const std::wstring overridePath = Minecraft::GetInstance()->modManager->resolveFolderAssetOverride(name);
-		if (!overridePath.empty())
-		{
-			img = new BufferedImage(overridePath, true);
-			if (img != nullptr && img->getWidth() > 0 && img->getHeight() > 0)
-			{
-				MemSect(0);
-				return img;
-			}
-			delete img;
-			img = nullptr;
-		}
-	}
 	// is this image one of the Title Update ones?
 	bool isTu = IsTUImage(texId, name);
 	wstring drive = L"";
@@ -1415,6 +1400,22 @@ BufferedImage *Textures::readImage(TEXTURE_NAME texId, const wstring& name)	// 4
 	}
 	else
 	{
+		if (Minecraft::GetInstance() != nullptr && Minecraft::GetInstance()->modManager != nullptr)
+		{
+			const std::wstring overridePath = Minecraft::GetInstance()->modManager->resolveFolderAssetOverride(name);
+			if (!overridePath.empty())
+			{
+				img = new BufferedImage(overridePath, true);
+				if (img != nullptr && img->getWidth() > 0 && img->getHeight() > 0)
+				{
+					MemSect(0);
+					return img;
+				}
+				delete img;
+				img = nullptr;
+			}
+		}
+
 		const char *pchName=wstringtofilename(name);
 #ifdef __PS3__
 		if(app.GetBootedFromDiscPatch() && app.IsFileInPatchList(pchName))
@@ -1633,4 +1634,3 @@ bool Textures::IsOriginalImage(TEXTURE_NAME texId, const wstring& name)
 	}
 	return false;
 }
-

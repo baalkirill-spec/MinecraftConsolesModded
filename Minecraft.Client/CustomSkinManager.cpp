@@ -12,6 +12,15 @@ namespace
 	constexpr DWORD kCustomSkinBitmask = 0x20;
 	constexpr const wchar_t* kRuntimeSkinName = L"ugcskin00000020.png";
 	constexpr size_t kMaxSkinFileBytes = 8 * 1024 * 1024;
+
+	bool EndsWithIgnoreCase(const std::wstring& value, const std::wstring& suffix)
+	{
+		if (value.size() < suffix.size())
+		{
+			return false;
+		}
+		return toLower(value.substr(value.size() - suffix.size())) == toLower(suffix);
+	}
 }
 
 CustomSkinManager::CustomSkinManager(const File& workingDirectory)
@@ -76,7 +85,7 @@ bool CustomSkinManager::loadSkinFile(const File& skinFile)
 		return false;
 	}
 
-	if (toLower(skinFile.getName()).find(L".png") == std::wstring::npos)
+	if (!EndsWithIgnoreCase(skinFile.getName(), L".png"))
 	{
 		app.DebugPrintf("CustomSkinManager: rejected non-png skin file %ls\n", skinFile.getPath().c_str());
 		return false;

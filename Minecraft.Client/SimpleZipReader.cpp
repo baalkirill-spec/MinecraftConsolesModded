@@ -223,6 +223,7 @@ bool SimpleZipReader::DecompressDeflate(const uint8_t* compressedData, size_t co
 	(void)compressedSize;
 	(void)uncompressedSize;
 	(void)outBytes;
+	app.DebugPrintf("SimpleZipReader: deflate-compressed zip entries are only supported on _WINDOWS64 builds in phase 1\n");
 	return false;
 #endif
 }

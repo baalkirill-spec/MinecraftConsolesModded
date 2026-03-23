@@ -2092,13 +2092,14 @@ void Minecraft::run_middle()
 			pause = app.IsAppPaused();
 
 #ifndef _CONTENT_PACKAGE
-			while (System::nanoTime() >= lastTime + 1000000000)
+			const int64_t fpsNow = System::nanoTime();
+			if (fpsNow - lastTime >= 1000000000LL)
 			{
 				MemSect(31);
-				updateFpsStrings(frames, Chunk::updates, 1000000000LL);
+				updateFpsStrings(frames, Chunk::updates, fpsNow - lastTime);
 				MemSect(0);
 				Chunk::updates = 0;
-				lastTime += 1000000000;
+				lastTime = fpsNow;
 				frames = 0;
 			}
 #endif
@@ -2144,10 +2145,16 @@ void Minecraft::emergencySave()
 
 void Minecraft::updateFpsStrings(int frameCount, int chunkUpdateCount, int64_t elapsedNs)
 {
-	fpsString = std::to_wstring(frameCount) + L" fps (" + std::to_wstring(chunkUpdateCount) + L" chunk updates)";
+	if (elapsedNs <= 0)
+	{
+		elapsedNs = 1;
+	}
+
+	const int displayedFps = static_cast<int>((static_cast<int64_t>(frameCount) * 1000000000LL + (elapsedNs / 2)) / elapsedNs);
+	fpsString = std::to_wstring(displayedFps) + L" fps (" + std::to_wstring(chunkUpdateCount) + L" chunk updates)";
 	const double averageFrameMs = frameCount > 0 ? static_cast<double>(elapsedNs) / static_cast<double>(frameCount) / 1000000.0 : 0.0;
 	wchar_t buffer[128];
-	swprintf(buffer, 128, L"%d FPS | %.2f ms | %d chunk updates", frameCount, averageFrameMs, chunkUpdateCount);
+	swprintf(buffer, 128, L"%d FPS | %.2f ms | %d chunk updates", displayedFps, averageFrameMs, chunkUpdateCount);
 	fpsOverlayString = buffer;
 }
 
@@ -5294,4 +5301,3 @@ int Minecraft::MustSignInReturnedPSN(void *pParam, int iPad, C4JStorage::EMessag
 	return 0;
 }
 #endif
-

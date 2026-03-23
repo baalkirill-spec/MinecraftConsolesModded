@@ -31,6 +31,24 @@ namespace
 		stream.read(output.data(), fileSize);
 		return output;
 	}
+
+	void AddUniquePath(std::vector<std::wstring>& paths, const std::wstring& path)
+	{
+		if (path.empty())
+		{
+			return;
+		}
+
+		for (const std::wstring& existingPath : paths)
+		{
+			if (toLower(existingPath) == toLower(path))
+			{
+				return;
+			}
+		}
+
+		paths.push_back(path);
+	}
 }
 
 ModManager::ModManager(const File& workingDirectory)
@@ -152,7 +170,7 @@ bool ModManager::loadFolderMod(const File& path, ModInfo& outInfo) const
 	outInfo.description = L"Folder mod without mod.json";
 
 	// Legacy root-first lookup keeps simple phase-1 folder mods working even before a full resource pack style mount exists.
-	outInfo.assetRoots.push_back(path.getPath());
+	AddUniquePath(outInfo.assetRoots, path.getPath());
 
 	const File manifest(path, kManifestFileName);
 	if (manifest.exists() && manifest.isFile())
@@ -165,13 +183,13 @@ bool ModManager::loadFolderMod(const File& path, ModInfo& outInfo) const
 	const File assets(path, L"assets");
 	if (assets.exists() && assets.isDirectory())
 	{
-		outInfo.assetRoots.push_back(assets.getPath());
+		AddUniquePath(outInfo.assetRoots, assets.getPath());
 	}
 
 	const File data(path, L"data");
 	if (data.exists() && data.isDirectory())
 	{
-		outInfo.dataRoots.push_back(data.getPath());
+		AddUniquePath(outInfo.dataRoots, data.getPath());
 	}
 
 	return true;
@@ -187,14 +205,20 @@ bool ModManager::loadZipMod(const File& path, ModInfo& outInfo) const
 	outInfo.description = L"Zip mod without mod.json";
 
 	std::string manifestText;
-	if (SimpleZipReader::ReadTextFile(path.getPath(), kManifestFileName, manifestText))
+	if (!SimpleZipReader::ReadTextFile(path.getPath(), kManifestFileName, manifestText))
 	{
-		outInfo.manifestPath = path.getPath() + L"!/mod.json";
-		outInfo.hasManifest = ParseManifest(manifestText, outInfo);
+		app.DebugPrintf("ModManager: skipping zip %ls because no readable mod.json was found\n", path.getPath().c_str());
+		return false;
 	}
 
-	outInfo.assetRoots.push_back(path.getPath() + L"!/assets");
-	outInfo.dataRoots.push_back(path.getPath() + L"!/data");
+	outInfo.manifestPath = path.getPath() + L"!/mod.json";
+	outInfo.hasManifest = ParseManifest(manifestText, outInfo);
+	if (!outInfo.hasManifest)
+	{
+		app.DebugPrintf("ModManager: zip manifest %ls did not contain supported string metadata fields; using fallback id/name\n", outInfo.manifestPath.c_str());
+	}
+
+	// Phase 1 keeps folder mods as the only supported runtime asset override path.
 	return true;
 }
 
