@@ -9,12 +9,20 @@
 class ModManager
 {
 public:
+	struct ScanDiagnostic
+	{
+		std::wstring sourcePath;
+		std::wstring severity;
+		std::wstring message;
+	};
+
 	explicit ModManager(const File& workingDirectory);
 
 	void initialize();
 	void refresh();
 	const std::vector<ModInfo>& getMods() const;
 	const std::vector<ModInfo::DataDefinition>& getDataDefinitions() const;
+	const std::vector<ScanDiagnostic>& getScanDiagnostics() const;
 	const File& getModsDirectory() const;
 	std::wstring resolveFolderAssetOverride(const std::wstring& relativePath) const;
 
@@ -22,6 +30,7 @@ private:
 	File m_modsDirectory;
 	std::vector<ModInfo> m_mods;
 	std::vector<ModInfo::DataDefinition> m_dataDefinitions;
+	std::vector<ScanDiagnostic> m_scanDiagnostics;
 	mutable std::unordered_map<std::wstring, std::wstring> m_assetOverrideCache;
 
 	void ensureModsDirectory() const;

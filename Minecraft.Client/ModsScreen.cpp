@@ -93,6 +93,7 @@ void ModsScreen::render(int xm, int ym, float a)
 
 	const std::vector<ModInfo>& mods = minecraft->modManager->getMods();
 	const std::vector<ModInfo::DataDefinition>& definitions = minecraft->modManager->getDataDefinitions();
+	const std::vector<ModManager::ScanDiagnostic>& diagnostics = minecraft->modManager->getScanDiagnostics();
 	const int modCount = static_cast<int>(mods.size());
 	const int pageCount = std::max(1, (modCount + kModsPerPage - 1) / kModsPerPage);
 	if (page >= pageCount)
@@ -109,6 +110,20 @@ void ModsScreen::render(int xm, int ym, float a)
 		y,
 		0xa0ffa0);
 	y += 18;
+	if (!diagnostics.empty())
+	{
+		drawString(font, L"Last scan diagnostics: " + std::to_wstring(diagnostics.size()), 12, y, 0xffc080);
+		y += 12;
+		const int maxVisible = std::min(3, static_cast<int>(diagnostics.size()));
+		for (int i = 0; i < maxVisible; ++i)
+		{
+			const ModManager::ScanDiagnostic& diagnostic = diagnostics[i];
+			const std::wstring line = L"- [" + diagnostic.severity + L"] " + diagnostic.message;
+			drawString(font, line, 18, y, diagnostic.severity == L"error" ? 0xff8080 : 0xe0e0e0);
+			y += 12;
+		}
+		y += 6;
+	}
 
 	if (mods.empty())
 	{

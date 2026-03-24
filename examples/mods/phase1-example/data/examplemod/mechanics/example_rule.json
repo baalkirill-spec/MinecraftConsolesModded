@@ -1,0 +1,5 @@
+{
+  "id": "examplemod:example_rule",
+  "type": "mechanics",
+  "description": "Example lightweight data definition discovered by phase-1 scanner."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "examplemod",
+  "name": "Example Phase-1 Folder Mod",
+  "version": "0.1.0",
+  "description": "Minimal sample demonstrating supported phase-1 folder mod structure.",
+  "authors": ["Mod Example Team"]
+}

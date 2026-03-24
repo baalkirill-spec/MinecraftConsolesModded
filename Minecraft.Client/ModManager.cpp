@@ -125,6 +125,24 @@ namespace
 		}
 		return value;
 	}
+
+	bool LooksLikeSimpleVersion(const std::wstring& version)
+	{
+		if (version.empty())
+		{
+			return false;
+		}
+
+		for (wchar_t ch : version)
+		{
+			if ((ch >= L'0' && ch <= L'9') || ch == L'.' || ch == L'-' || ch == L'_' || ch == L'+')
+			{
+				continue;
+			}
+			return false;
+		}
+		return true;
+	}
 }
 
 ModManager::ModManager(const File& workingDirectory)
@@ -152,6 +170,11 @@ const std::vector<ModInfo>& ModManager::getMods() const
 const std::vector<ModInfo::DataDefinition>& ModManager::getDataDefinitions() const
 {
 	return m_dataDefinitions;
+}
+
+const std::vector<ModManager::ScanDiagnostic>& ModManager::getScanDiagnostics() const
+{
+	return m_scanDiagnostics;
 }
 
 const File& ModManager::getModsDirectory() const
@@ -218,6 +241,7 @@ void ModManager::scanMods()
 {
 	m_mods.clear();
 	m_dataDefinitions.clear();
+	m_scanDiagnostics.clear();
 	m_assetOverrideCache.clear();
 	std::vector<File*>* files = m_modsDirectory.listFiles();
 	if (files == nullptr)
@@ -267,6 +291,7 @@ void ModManager::scanMods()
 			if (!normalizedId.empty() && loadedModIds.find(normalizedId) != loadedModIds.end())
 			{
 				app.DebugPrintf("ModManager: skipping %ls because mod id %ls is already loaded\n", info.sourcePath.c_str(), info.id.c_str());
+				m_scanDiagnostics.push_back({ info.sourcePath, L"warning", L"Skipped because another mod with the same id was already loaded." });
 				delete file;
 				continue;
 			}
@@ -316,6 +341,21 @@ void ModManager::scanMods()
 			}
 			m_mods.push_back(info);
 		}
+		else if (!info.sourcePath.empty())
+		{
+			if (info.errors.empty() && info.warnings.empty())
+			{
+				m_scanDiagnostics.push_back({ info.sourcePath, L"info", L"Skipped because it did not match a supported phase-1 mod layout." });
+			}
+			for (const std::wstring& warning : info.warnings)
+			{
+				m_scanDiagnostics.push_back({ info.sourcePath, L"warning", warning });
+			}
+			for (const std::wstring& error : info.errors)
+			{
+				m_scanDiagnostics.push_back({ info.sourcePath, L"error", error });
+			}
+		}
 
 		delete file;
 	}
@@ -347,6 +387,7 @@ bool ModManager::loadFolderMod(const File& path, ModInfo& outInfo) const
 	if (!hasRecognizedContent)
 	{
 		app.DebugPrintf("ModManager: skipping folder %ls because it has no mod.json, assets/, data/, textures/, or minecraft/ content\n", path.getPath().c_str());
+		outInfo.warnings.push_back(L"No supported content found (expected mod.json, assets/, data/, textures/, or minecraft/).");
 		return false;
 	}
 
@@ -390,6 +431,7 @@ bool ModManager::loadZipMod(const File& path, ModInfo& outInfo) const
 	if (!SimpleZipReader::ReadTextFile(path.getPath(), kManifestFileName, manifestText))
 	{
 		app.DebugPrintf("ModManager: skipping zip %ls because no readable mod.json was found\n", path.getPath().c_str());
+		outInfo.warnings.push_back(L"Zip was skipped because no readable mod.json was found.");
 		return false;
 	}
 
@@ -443,8 +485,11 @@ bool ModManager::ParseManifest(const std::string& manifestText, ModInfo& outInfo
 		outInfo.warnings.push_back(L"mod.json is missing the recommended 'id' field; using a folder/file-name fallback id.");
 	}
 	if (!name.empty()) outInfo.name = name;
+	else outInfo.warnings.push_back(L"mod.json is missing the recommended 'name' field; using a folder/file-name fallback name.");
 	if (!version.empty()) outInfo.version = version;
+	else outInfo.warnings.push_back(L"mod.json is missing the recommended 'version' field; using fallback version 0.0.0.");
 	if (!description.empty()) outInfo.description = description;
+	else outInfo.warnings.push_back(L"mod.json is missing the optional 'description' field.");
 	if (!author.empty())
 	{
 		outInfo.author = author;
@@ -453,6 +498,14 @@ bool ModManager::ParseManifest(const std::string& manifestText, ModInfo& outInfo
 	for (const std::wstring& authorName : authors)
 	{
 		AddUniqueString(outInfo.authors, authorName);
+	}
+	if (outInfo.authors.empty())
+	{
+		outInfo.warnings.push_back(L"mod.json does not define 'author' or 'authors'.");
+	}
+	if (!version.empty() && !LooksLikeSimpleVersion(version))
+	{
+		outInfo.warnings.push_back(L"mod.json field 'version' uses an unusual format; expected a simple dotted/semver-like value.");
 	}
 
 	return true;
@@ -818,6 +871,18 @@ std::wstring ModManager::NormalizeAssetOverridePath(const std::wstring& input)
 	if (output.size() > 4 && ToLowerCopy(output.substr(0, 4)) == L"res/")
 	{
 		output = output.substr(4);
+	}
+	if (output.size() > 17 && ToLowerCopy(output.substr(0, 17)) == L"assets/minecraft/")
+	{
+		output = output.substr(17);
+	}
+	else if (output.size() > 7 && ToLowerCopy(output.substr(0, 7)) == L"assets/")
+	{
+		output = output.substr(7);
+	}
+	if (output.size() > 10 && ToLowerCopy(output.substr(0, 10)) == L"minecraft/")
+	{
+		output = output.substr(10);
 	}
 
 	return output;
