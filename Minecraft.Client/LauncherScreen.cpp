@@ -7,6 +7,7 @@
 #include "Options.h"
 #include "TitleScreen.h"
 #include "Textures.h"
+#include "User.h"
 
 #include "..\\Minecraft.World\\StringHelpers.h"
 #include "..\\Minecraft.World\\System.h"
@@ -171,7 +172,7 @@ void LauncherScreen::validateNameAndRefreshUi()
 
 void LauncherScreen::startGame()
 {
-	if (minecraft == nullptr || minecraft->options == nullptr || minecraft->user == nullptr || playerNameEdit == nullptr)
+	if (minecraft == nullptr || minecraft->options == nullptr || playerNameEdit == nullptr)
 	{
 		return;
 	}
@@ -185,6 +186,10 @@ void LauncherScreen::startGame()
 
 	minecraft->options->playerName = trimmed;
 	minecraft->options->save();
+	if (minecraft->user == nullptr)
+	{
+		minecraft->user = new User(trimmed, L"");
+	}
 	minecraft->user->name = trimmed;
 	minecraft->setScreen(new TitleScreen());
 }

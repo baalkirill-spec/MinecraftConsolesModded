@@ -1,78 +1,98 @@
-# Compile Instructions
+# Build Guide (Windows / Visual Studio / CMake)
 
-## Visual Studio
+This repository is designed to be built on **Windows x64**.
 
-1. Clone or download the repository
-1. Open the repo folder in Visual Studio 2022+.
-2. Wait for cmake to configure the project and load all assets (this may take a few minutes on the first run).
-3. Right click a folder in the solution explorer and switch to the 'CMake Targets View'
-4. Select platform and configuration from the dropdown. EG: `Windows64 - Debug` or `Windows64 - Release`
-5. Pick the startup project `Minecraft.Client.exe` or `Minecraft.Server.exe` using the debug targets dropdown
-6. Build and run the project:
-   - `Build > Build Solution` (or `Ctrl+Shift+B`)
-   - Start debugging with `F5`.
+## 1) Requirements
 
-### Dedicated server debug arguments
+- **Visual Studio 2022** (Desktop C++ workload)
+- **CMake** (version compatible with presets; CMake 3.25+ recommended)
+- **Windows SDK** (installed via Visual Studio)
+- A normal clone of this repository with subfolders intact
 
-- Default debugger arguments for `Minecraft.Server`:
-  - `-port 25565 -bind 0.0.0.0 -name DedicatedServer`
-- You can override arguments in:
-  - `Project Properties > Debugging > Command Arguments`
-- `Minecraft.Server` post-build copies only the dedicated-server asset set:
-  - `Common/Media/MediaWindows64.arc`
-  - `Common/res`
-  - `Windows64/GameHDD`
+> Recommended shell: **Developer PowerShell for VS 2022**.
 
-## CMake (Windows x64)
+---
 
-Configure (use your VS Community instance explicitly):
+## 2) Configure the project (CMake preset)
 
-Open `Developer PowerShell for VS` and run:
+From repo root:
 
 ```powershell
 cmake --preset windows64
 ```
 
-Build Debug:
+This creates build files under:
+
+- `build/windows64/`
+
+---
+
+## 3) Build targets
+
+### Client (Debug)
 
 ```powershell
 cmake --build --preset windows64-debug --target Minecraft.Client
 ```
 
-Build Release:
+### Client (Release)
 
 ```powershell
 cmake --build --preset windows64-release --target Minecraft.Client
 ```
 
-Build Dedicated Server (Debug):
+### Dedicated Server (optional)
 
 ```powershell
 cmake --build --preset windows64-debug --target Minecraft.Server
-```
-
-Build Dedicated Server (Release):
-
-```powershell
 cmake --build --preset windows64-release --target Minecraft.Server
 ```
 
-Run executable:
+---
 
-```powershell
-cd .\build\windows64\Minecraft.Client\Debug
-.\Minecraft.Client.exe
-```
+## 4) Visual Studio workflow
 
-Run dedicated server:
+1. Open repo folder in Visual Studio (CMake project mode).
+2. Wait for CMake configure to finish.
+3. Select preset/configuration:
+   - `Windows64 - Debug` or
+   - `Windows64 - Release`
+4. Select startup target:
+   - `Minecraft.Client`
+5. Build/Run:
+   - `Build > Build Solution`
+   - `Debug > Start Debugging (F5)`
 
-```powershell
-cd .\build\windows64\Minecraft.Server\Debug
-.\Minecraft.Server.exe -port 25565 -bind 0.0.0.0 -name DedicatedServer
-```
+---
 
-Notes:
-- The CMake build is Windows-only and x64-only.
-- Contributors on macOS or Linux need a Windows machine or VM to build the project. Running the game via Wine is separate from having a supported build environment.
-- Post-build asset copy is automatic for `Minecraft.Client` in CMake (Debug and Release variants).
-- The game relies on relative paths (for example `Common\Media\...`), so launching from the output directory is required.
+## 5) Output binaries
+
+Typical output paths:
+
+- Client Debug: `build/windows64/Minecraft.Client/Debug/Minecraft.Client.exe`
+- Client Release: `build/windows64/Minecraft.Client/Release/Minecraft.Client.exe`
+- Server Debug: `build/windows64/Minecraft.Server/Debug/Minecraft.Server.exe`
+
+Run from the output directory so relative asset paths resolve correctly.
+
+---
+
+## 6) Run and quick validation checklist
+
+After launching `Minecraft.Client.exe`, verify:
+
+1. **Launcher screen appears first**.
+2. Enter valid player name (3-16, letters/numbers/underscore), press **Start Game**.
+3. Exit and relaunch: player name should be loaded from `options.txt`.
+4. Main menu opens and buttons work (Singleplayer/Multiplayer/Options/Quit/Mods).
+5. FPS overlay can be toggled in video/settings and appears in-game/UI.
+6. `mods/` folder exists and Mods screen can refresh/discover folder mods.
+7. `skins/` folder exists and custom skin path can be used.
+
+---
+
+## 7) Notes and scope
+
+- This build path targets **Windows64** for playable validation.
+- Launcher is currently an **integrated launcher screen** (inside `Minecraft.Client`), not a separate launcher EXE.
+- Folder-based mods are the primary supported mod path (see modding docs).
