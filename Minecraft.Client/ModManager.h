@@ -22,6 +22,8 @@ public:
 	void refresh();
 	const std::vector<ModInfo>& getMods() const;
 	const std::vector<ModInfo::DataDefinition>& getDataDefinitions() const;
+	const std::vector<ModInfo::DataDefinition>& getDataDefinitionsByType(ModInfo::DataDefinition::Type type) const;
+	const ModInfo::DataDefinition* findDataDefinition(const std::wstring& identifier) const;
 	const std::vector<ScanDiagnostic>& getScanDiagnostics() const;
 	const File& getModsDirectory() const;
 	std::wstring resolveFolderAssetOverride(const std::wstring& relativePath) const;
@@ -30,11 +32,19 @@ private:
 	File m_modsDirectory;
 	std::vector<ModInfo> m_mods;
 	std::vector<ModInfo::DataDefinition> m_dataDefinitions;
+	std::unordered_map<std::wstring, size_t> m_dataDefinitionIndexById;
+	std::vector<ModInfo::DataDefinition> m_dataDefinitionsBlocks;
+	std::vector<ModInfo::DataDefinition> m_dataDefinitionsItems;
+	std::vector<ModInfo::DataDefinition> m_dataDefinitionsEntities;
+	std::vector<ModInfo::DataDefinition> m_dataDefinitionsMechanics;
+	std::vector<ModInfo::DataDefinition> m_dataDefinitionsWorldRules;
+	std::vector<ModInfo::DataDefinition> m_dataDefinitionsUnknown;
 	std::vector<ScanDiagnostic> m_scanDiagnostics;
 	mutable std::unordered_map<std::wstring, std::wstring> m_assetOverrideCache;
 
 	void ensureModsDirectory() const;
 	void scanMods();
+	void indexDataDefinition(const ModInfo::DataDefinition& definition);
 	bool loadFolderMod(const File& path, ModInfo& outInfo) const;
 	bool loadZipMod(const File& path, ModInfo& outInfo) const;
 	bool loadFolderDataDefinitions(const File& path, ModInfo& outInfo) const;
@@ -51,4 +61,5 @@ private:
 	static std::wstring NormalizeAssetOverridePath(const std::wstring& input);
 	static std::wstring TrimAsciiWhitespace(const std::string& text);
 	static bool EndsWithIgnoreCase(const std::wstring& value, const std::wstring& suffix);
+	static bool LooksLikeJsonObjectWithMembers(const std::wstring& text);
 };
