@@ -68,6 +68,12 @@ Open the in-game Mods screen and press **Refresh Mods**.
 
 The screen now shows recent scan diagnostics (warnings/errors), and each loaded mod reports warning/error counts.
 
+## 6.1) Duplicate mod ids and precedence
+
+- Keep `id` unique across all mods.
+- If a zip metadata mod and a folder mod share the same id, the folder mod is preferred (folder-first runtime path).
+- For duplicate data definition ids, the first discovered definition is kept for deterministic phase-1 behaviour, and later duplicates are reported as warnings.
+
 ## 7) Honest limitations
 
 Not currently supported:

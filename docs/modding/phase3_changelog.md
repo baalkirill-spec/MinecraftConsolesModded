@@ -7,6 +7,7 @@ Date: 2026-03-24
 - Improved folder-mod diagnostics during `mods/` scanning.
 - Added stricter `mod.json` validation warnings for missing `name`, `version`, and author fields.
 - Improved folder override path normalization for `assets/...`, `assets/minecraft/...`, and `minecraft/...` query variants.
+- Added deterministic duplicate handling: folder mods are preferred over zip metadata entries when ids clash, and duplicate data-definition ids are reported and skipped deterministically.
 - Added example phase-1 mod structure under `examples/mods/phase1-example`.
 
 ## Regression checklist
@@ -16,6 +17,8 @@ Date: 2026-03-24
 - [ ] Folder mods with `mod.json` still load.
 - [ ] Folder mods using `assets/minecraft/...` texture overrides still resolve.
 - [ ] `data/<namespace>/<category>/.../*.json` definitions still scan and validate.
+- [ ] Duplicate mod ids produce clear diagnostics and keep folder mods preferred over zip metadata mods.
+- [ ] Duplicate data-definition ids produce warnings and deterministic first-definition wins behaviour.
 - [ ] Zip mods remain metadata-only (no runtime zip asset mounting).
 - [ ] Mods screen can refresh without crashing.
 

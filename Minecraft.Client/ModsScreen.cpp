@@ -118,7 +118,8 @@ void ModsScreen::render(int xm, int ym, float a)
 		for (int i = 0; i < maxVisible; ++i)
 		{
 			const ModManager::ScanDiagnostic& diagnostic = diagnostics[i];
-			const std::wstring line = L"- [" + diagnostic.severity + L"] " + diagnostic.message;
+			const std::wstring line = L"- [" + diagnostic.severity + L"] " + diagnostic.message +
+				(diagnostic.sourcePath.empty() ? L"" : (L" (" + diagnostic.sourcePath + L")"));
 			drawString(font, line, 18, y, diagnostic.severity == L"error" ? 0xff8080 : 0xe0e0e0);
 			y += 12;
 		}

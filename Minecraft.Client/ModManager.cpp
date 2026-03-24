@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cwctype>
 #include <fstream>
+#include <unordered_map>
 #include <set>
 
 namespace
@@ -259,6 +260,8 @@ void ModManager::scanMods()
 	});
 
 	std::set<std::wstring> loadedModIds;
+	std::unordered_map<std::wstring, size_t> modIdToIndex;
+	std::set<std::wstring> discoveredDefinitionIds;
 
 	for (File* file : *files)
 	{
@@ -290,6 +293,21 @@ void ModManager::scanMods()
 			const std::wstring normalizedId = ToLowerCopy(info.id);
 			if (!normalizedId.empty() && loadedModIds.find(normalizedId) != loadedModIds.end())
 			{
+				const auto existingIt = modIdToIndex.find(normalizedId);
+				if (existingIt != modIdToIndex.end())
+				{
+					ModInfo& existing = m_mods[existingIt->second];
+					const bool preferCurrentFolderMod = (existing.sourceType == ModInfo::SourceType::ZipArchive &&
+						info.sourceType == ModInfo::SourceType::Folder);
+					if (preferCurrentFolderMod)
+					{
+						m_scanDiagnostics.push_back({ existing.sourcePath, L"info", L"Replaced zip metadata entry because a folder mod with the same id was found (folder mods are the primary runtime path)." });
+						existing = info;
+						delete file;
+						continue;
+					}
+				}
+
 				app.DebugPrintf("ModManager: skipping %ls because mod id %ls is already loaded\n", info.sourcePath.c_str(), info.id.c_str());
 				m_scanDiagnostics.push_back({ info.sourcePath, L"warning", L"Skipped because another mod with the same id was already loaded." });
 				delete file;
@@ -299,6 +317,7 @@ void ModManager::scanMods()
 			if (!normalizedId.empty())
 			{
 				loadedModIds.insert(normalizedId);
+				modIdToIndex[normalizedId] = m_mods.size();
 			}
 
 			app.DebugPrintf("ModManager: found %ls (%ls) v%ls at %ls\n",
@@ -336,6 +355,19 @@ void ModManager::scanMods()
 			{
 				if (definition.valid)
 				{
+					const std::wstring normalizedDefinitionId = ToLowerCopy(definition.identifier);
+					if (!normalizedDefinitionId.empty() &&
+						discoveredDefinitionIds.find(normalizedDefinitionId) != discoveredDefinitionIds.end())
+					{
+						const std::wstring duplicateMessage = L"Duplicate data definition id '" + definition.identifier +
+							L"' was skipped (first discovered definition kept for deterministic phase-1 behavior).";
+						m_scanDiagnostics.push_back({ info.sourcePath, L"warning", duplicateMessage });
+						continue;
+					}
+					if (!normalizedDefinitionId.empty())
+					{
+						discoveredDefinitionIds.insert(normalizedDefinitionId);
+					}
 					m_dataDefinitions.push_back(definition);
 				}
 			}
@@ -474,6 +506,10 @@ bool ModManager::ParseManifest(const std::string& manifestText, ModInfo& outInfo
 		if (ValidateAndNormalizeModId(id, normalizedId))
 		{
 			outInfo.id = normalizedId;
+			if (!(normalizedId[0] >= L'a' && normalizedId[0] <= L'z'))
+			{
+				outInfo.warnings.push_back(L"mod.json field 'id' should ideally start with a lowercase letter for compatibility.");
+			}
 		}
 		else
 		{
