@@ -30,6 +30,7 @@
 #include "Screen.h"
 #include "DeathScreen.h"
 #include "ErrorScreen.h"
+#include "LauncherScreen.h"
 #include "TitleScreen.h"
 #include "InventoryScreen.h"
 #include "InBedChatScreen.h"
@@ -342,6 +343,11 @@ void Minecraft::init()
 	levelSource = new McRegionLevelStorageSource(File(workingDirectory, L"saves"));
 	//        levelSource = new MemoryLevelStorageSource();
 	options = new Options(this, workingDirectory);
+	if (user != nullptr)
+	{
+		user->name = Options::NormalizePlayerName(options->playerName);
+		options->playerName = user->name;
+	}
 	modManager = new ModManager(workingDirectory);
 	modManager->initialize();
 	skins = new TexturePackRepository(workingDirectory, this);
@@ -441,7 +447,7 @@ void Minecraft::init()
 	}
 	else
 	{
-		setScreen(new TitleScreen());
+		setScreen(new LauncherScreen());
 	}
 	progressRenderer = new ProgressRenderer(this);
 

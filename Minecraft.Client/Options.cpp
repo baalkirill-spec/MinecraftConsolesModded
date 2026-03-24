@@ -18,6 +18,8 @@ namespace
 {
 	constexpr int kMinViewDistance = -2;
 	constexpr int kMaxViewDistance = 3;
+	constexpr size_t kMinPlayerNameLength = 3;
+	constexpr size_t kMaxPlayerNameLength = 16;
 	struct WindowedResolutionPreset
 	{
 		int width;
@@ -80,6 +82,14 @@ namespace
 		}
 
 		return label + L" (" + std::to_wstring(ViewDistanceToChunks(clamped)) + L" chunks)";
+	}
+
+	bool IsSafePlayerNameChar(wchar_t ch)
+	{
+		return (ch >= L'a' && ch <= L'z')
+			|| (ch >= L'A' && ch <= L'Z')
+			|| (ch >= L'0' && ch <= L'9')
+			|| ch == L'_';
 	}
 }
 
@@ -247,6 +257,7 @@ void Options::init()
 	showFpsOverlay = false;
 	customSkinPath = L"custom_skin.png";
 	windowedResolution = 0;
+	playerName = L"Player";
 }
 
 Options::Options(Minecraft *minecraft, File workingDirectory)
@@ -565,6 +576,7 @@ void Options::load()
 		if (cmds[0] == L"showFpsOverlay") showFpsOverlay = (cmds[1] == L"true");
 		if (cmds[0] == L"customSkinPath") customSkinPath = cmds[1];
 		if (cmds[0] == L"windowedResolution") windowedResolution = _fromString<int>(cmds[1]);
+		if (cmds[0] == L"playerName") playerName = cmds[1];
 		if (cmds[0] == L"skin") skin = cmds[1];
 		if (cmds[0] == L"lastServer") lastMpIp = cmds[1];
 
@@ -609,6 +621,7 @@ void Options::load()
 	if (difficulty > 3) difficulty = 3;
 
 	windowedResolution = ClampWindowedResolutionIndex(windowedResolution);
+	playerName = NormalizePlayerName(playerName);
 }
 
 float Options::readFloat(wstring string)
@@ -643,6 +656,7 @@ void Options::save()
 	dos.writeChars(showFpsOverlay ? L"showFpsOverlay:true\n" : L"showFpsOverlay:false\n");
 	dos.writeChars(L"customSkinPath:" + customSkinPath + L"\n");
 	dos.writeChars(L"windowedResolution:" + std::to_wstring(windowedResolution) + L"\n");
+	dos.writeChars(L"playerName:" + NormalizePlayerName(playerName) + L"\n");
 	dos.writeChars(L"skin:" + skin + L"\n");
 	dos.writeChars(L"lastServer:" + lastMpIp + L"\n");
 
@@ -689,4 +703,43 @@ bool Options::applyWindowedResolution() const
 #else
 	return false;
 #endif
+}
+
+bool Options::IsValidPlayerName(const std::wstring& value)
+{
+	if (value.length() < kMinPlayerNameLength || value.length() > kMaxPlayerNameLength)
+	{
+		return false;
+	}
+
+	for (size_t i = 0; i < value.length(); ++i)
+	{
+		if (!IsSafePlayerNameChar(value[i]))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+std::wstring Options::NormalizePlayerName(const std::wstring& rawValue)
+{
+	std::wstring result;
+	result.reserve(kMaxPlayerNameLength);
+
+	for (size_t i = 0; i < rawValue.length() && result.length() < kMaxPlayerNameLength; ++i)
+	{
+		if (IsSafePlayerNameChar(rawValue[i]))
+		{
+			result.push_back(rawValue[i]);
+		}
+	}
+
+	if (result.length() < kMinPlayerNameLength)
+	{
+		return L"Player";
+	}
+
+	return result;
 }

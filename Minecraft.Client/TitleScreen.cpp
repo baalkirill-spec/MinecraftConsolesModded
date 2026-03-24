@@ -80,14 +80,16 @@ void TitleScreen::init()
 
     Language *language = Language::getInstance();
 
-    const int spacing = 24;
-    const int topPos = height / 4 + 24;
+	const int buttonWidth = 200;
+	const int smallButtonWidth = 98;
+	const int spacing = 24;
+	const int topPos = height / 4 + 46;
 
-    buttons.push_back(new Button(1, width / 2 - 100, topPos, language->getElement(L"menu.singleplayer")));
-    buttons.push_back(multiplayerButton = new Button(2, width / 2 - 100, topPos + spacing * 1, language->getElement(L"menu.multiplayer")));
-    buttons.push_back(new Button(0, width / 2 - 100, topPos + spacing * 2, language->getElement(L"menu.options")));
-    buttons.push_back(new Button(4, width / 2 - 100, topPos + spacing * 3, language->getElement(L"menu.quit")));
-    buttons.push_back(new Button(5, width / 2 - 100, topPos + spacing * 4 + 4, 200, 20, L"Mods"));
+	buttons.push_back(new Button(1, width / 2 - buttonWidth / 2, topPos, buttonWidth, 20, language->getElement(L"menu.singleplayer")));
+	buttons.push_back(multiplayerButton = new Button(2, width / 2 - buttonWidth / 2, topPos + spacing, buttonWidth, 20, language->getElement(L"menu.multiplayer")));
+	buttons.push_back(new Button(0, width / 2 - buttonWidth / 2, topPos + spacing * 2, smallButtonWidth, 20, language->getElement(L"menu.options")));
+	buttons.push_back(new Button(4, width / 2 + 2, topPos + spacing * 2, smallButtonWidth, 20, language->getElement(L"menu.quit")));
+	buttons.push_back(new Button(5, width / 2 - buttonWidth / 2, topPos + spacing * 3, buttonWidth, 20, L"Mods"));
 
 	if (minecraft->modManager != nullptr)
 	{
@@ -141,23 +143,28 @@ void TitleScreen::render(int xm, int ym, float a)
 {
 	renderBackground(static_cast<int>((System::currentTimeMillis() / 64) & 31));
 
-	const int titleY = 26;
-	drawCenteredString(font, L"MINECRAFT", width / 2 + 1, titleY + 1, 0x202020);
-	drawCenteredString(font, L"MINECRAFT", width / 2, titleY, 0xffffff);
-	drawCenteredString(font, L"CONSOLES MODDED", width / 2 + 1, titleY + 13, 0x402000);
-	drawCenteredString(font, L"CONSOLES MODDED", width / 2, titleY + 12, 0xffff55);
+	const int logoY = 20;
+	const int panelWidth = 240;
+	const int panelTop = height / 4 + 36;
+	const int panelLeft = width / 2 - panelWidth / 2;
+	fill(panelLeft, panelTop, panelLeft + panelWidth, panelTop + 104, 0x66000000);
+
+	drawCenteredString(font, L"MINECRAFT", width / 2 + 2, logoY + 2, 0x202020);
+	drawCenteredString(font, L"MINECRAFT", width / 2, logoY, 0xffffff);
+	drawCenteredString(font, L"CONSOLES MODDED", width / 2 + 1, logoY + 13, 0x303000);
+	drawCenteredString(font, L"CONSOLES MODDED", width / 2, logoY + 12, 0xffff55);
 
 	if (!splash.empty())
 	{
-		drawCenteredString(font, splash, width / 2, titleY + 28, 0xffe080);
+		drawCenteredString(font, splash, width / 2, logoY + 30, 0xffe080);
 	}
 
 	drawString(font, ClientConstants::VERSION_STRING, 6, 6, 0xb0b0b0);
 	drawString(font, ClientConstants::BRANCH_STRING, 6, 16, 0x909090);
+	drawString(font, L"Player: " + (minecraft != nullptr && minecraft->user != nullptr ? minecraft->user->name : L"Unknown"), 6, 26, 0xc0c0c0);
 
-	wstring footer = L"Singleplayer  Multiplayer  Options  Quit";
-	drawCenteredString(font, footer, width / 2, height - 42, 0xe0e0e0);
-	drawCenteredString(font, L"Phase-1 modding: folder mods, asset overrides, basic data discovery", width / 2, height - 30, 0xa0a0a0);
+	drawCenteredString(font, L"Main Menu inspired by Java-era layout", width / 2, height - 42, 0xe0e0e0);
+	drawCenteredString(font, L"Phase-1 modding + skins + FPS overlay preserved", width / 2, height - 30, 0xa0a0a0);
 
 	Screen::render(xm, ym, a);
 }

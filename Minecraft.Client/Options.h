@@ -114,6 +114,7 @@ public:
 	bool showFpsOverlay;
 	wstring customSkinPath;
 	int windowedResolution;
+	wstring playerName;
 
 	void init();	// 4J added
     Options(Minecraft *minecraft, File workingDirectory);
@@ -134,6 +135,8 @@ public:
 	wstring getWindowedResolutionMessage() const;
 	bool cycleWindowedResolution(int dir);
 	bool applyWindowedResolution() const;
+	static bool IsValidPlayerName(const std::wstring& value);
+	static std::wstring NormalizePlayerName(const std::wstring& rawValue);
 
 	bool isCloudsOn();
 };
