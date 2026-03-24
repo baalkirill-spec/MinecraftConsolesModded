@@ -15,7 +15,7 @@ public:
     class Option
 	{
 	public:
-		static const Option options[17];
+		static const Option options[18];
 		static const Option *MUSIC;
 		static const Option *SOUND;
 		static const Option *INVERT_MOUSE;
@@ -33,6 +33,7 @@ public:
 		static const Option *GAMMA;
 		static const Option *RENDER_CLOUDS;
 		static const Option *PARTICLES;
+		static const Option *SHOW_FPS;
 
 	private:
 		const bool _isProgress;
@@ -110,6 +111,10 @@ public:
 	int particles; // 0 is all, 1 is decreased and 2 is minimal
 	float fov;
 	float gamma;
+	bool showFpsOverlay;
+	wstring customSkinPath;
+	int windowedResolution;
+	wstring playerName;
 
 	void init();	// 4J added
     Options(Minecraft *minecraft, File workingDirectory);
@@ -127,6 +132,11 @@ private:
 	float readFloat(wstring string);
 public:
 	void save();
+	wstring getWindowedResolutionMessage() const;
+	bool cycleWindowedResolution(int dir);
+	bool applyWindowedResolution() const;
+	static bool IsValidPlayerName(const std::wstring& value);
+	static std::wstring NormalizePlayerName(const std::wstring& rawValue);
 
 	bool isCloudsOn();
 };

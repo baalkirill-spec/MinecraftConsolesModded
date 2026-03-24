@@ -14,6 +14,8 @@
 #include "HumanoidModel.h"
 #include "Options.h"
 #include "TexturePackRepository.h"
+#include "ModManager.h"
+#include "CustomSkinManager.h"
 #include "StatsCounter.h"
 #include "EntityRenderDispatcher.h"
 #include "TileEntityRenderDispatcher.h"
@@ -28,6 +30,7 @@
 #include "Screen.h"
 #include "DeathScreen.h"
 #include "ErrorScreen.h"
+#include "LauncherScreen.h"
 #include "TitleScreen.h"
 #include "InventoryScreen.h"
 #include "InBedChatScreen.h"
@@ -119,6 +122,11 @@ int iToolTipOffset = 85;
 ResourceLocation Minecraft::DEFAULT_FONT_LOCATION = ResourceLocation(TN_DEFAULT_FONT);
 ResourceLocation Minecraft::ALT_FONT_LOCATION = ResourceLocation(TN_ALT_FONT);
 
+namespace
+{
+	constexpr int64_t kFpsUpdateIntervalNs = 250000000LL;
+}
+
 
 Minecraft::Minecraft(Component *mouseComponent, Canvas *parent, MinecraftApplet *minecraftApplet, int width, int height, bool fullscreen)
 {
@@ -168,6 +176,8 @@ Minecraft::Minecraft(Component *mouseComponent, Canvas *parent, MinecraftApplet 
 	soundEngine = new SoundEngine();
 	mouseHandler = nullptr;
 	skins = nullptr;
+	modManager = nullptr;
+	customSkinManager = nullptr;
 	workingDirectory = File(L"");
 	levelSource = nullptr;
 	stats[0] = nullptr;
@@ -184,6 +194,8 @@ Minecraft::Minecraft(Component *mouseComponent, Canvas *parent, MinecraftApplet 
 	//lastTickTime = System::currentTimeMillis();
 	recheckPlayerIn = 0;
 	running = true;
+	fpsString = L"0 fps (0 chunk updates)";
+	fpsOverlayString = L"0 FPS | 0.00 ms | 0 chunk updates";
 	unoccupiedQuadrant = -1;
 
 	Stats::init();
@@ -331,9 +343,19 @@ void Minecraft::init()
 	levelSource = new McRegionLevelStorageSource(File(workingDirectory, L"saves"));
 	//        levelSource = new MemoryLevelStorageSource();
 	options = new Options(this, workingDirectory);
+	if (user != nullptr)
+	{
+		user->name = Options::NormalizePlayerName(options->playerName);
+		options->playerName = user->name;
+	}
+	modManager = new ModManager(workingDirectory);
+	modManager->initialize();
 	skins = new TexturePackRepository(workingDirectory, this);
 	skins->addDebugPacks();
 	textures = new Textures(skins, options);
+	customSkinManager = new CustomSkinManager(workingDirectory);
+	customSkinManager->initialize(options->customSkinPath);
+	options->applyWindowedResolution();
 	//renderLoadingScreen();
 
 	font = new Font(options, L"font/Default.png", textures, false, &DEFAULT_FONT_LOCATION, 23, 20, 8, 8, SFontData::Codepoints);
@@ -425,7 +447,7 @@ void Minecraft::init()
 	}
 	else
 	{
-		setScreen(new TitleScreen());
+		setScreen(new LauncherScreen());
 	}
 	progressRenderer = new ProgressRenderer(this);
 
@@ -640,7 +662,7 @@ void Minecraft::run()
 		return;
 	}
 
-	int64_t lastTime = System::currentTimeMillis();
+	int64_t lastTime = System::nanoTime();
 	int frames = 0;
 
 	while (running)
@@ -745,11 +767,12 @@ void Minecraft::run()
 		frames++;
 		pause = !isClientSide() && screen != nullptr && screen->isPauseScreen();
 
-		while (System::currentTimeMillis() >= lastTime + 1000)
+		const int64_t fpsNow = System::nanoTime();
+		if (fpsNow - lastTime >= kFpsUpdateIntervalNs)
 		{
-			fpsString = std::to_wstring(frames) + L" fps (" + std::to_wstring(Chunk::updates) + L" chunk updates)";
+			updateFpsStrings(frames, Chunk::updates, fpsNow - lastTime);
 			Chunk::updates = 0;
-			lastTime += 1000;
+			lastTime = fpsNow;
 			frames = 0;
 		}
 		/*
@@ -1039,6 +1062,7 @@ shared_ptr<MultiplayerLocalPlayer> Minecraft::createExtraLocalPlayer(int idx, co
 		// Moved the creation of these into the main thread, before level launch
 		//localitemInHandRenderers[idx] = new ItemInHandRenderer(this);
 		localplayers[idx] = localgameModes[idx]->createPlayer(level);
+		applyConfiguredCustomSkin(localplayers[idx]);
 
 		PlayerUID playerXUIDOffline = INVALID_XUID;
 		PlayerUID playerXUIDOnline = INVALID_XUID;
@@ -2056,6 +2080,20 @@ void Minecraft::run_middle()
 			Display::update();
 			PIXEndNamedEvent();
 
+#ifdef _WINDOWS64
+			extern int g_rScreenWidth;
+			extern int g_rScreenHeight;
+			if (g_rScreenWidth > 0 && g_rScreenHeight > 0 &&
+				(g_rScreenWidth != width_phys || g_rScreenHeight != height_phys))
+			{
+				width_phys = g_rScreenWidth;
+				height_phys = g_rScreenHeight;
+				width = RenderManager.IsWidescreen() ? g_rScreenWidth : (g_rScreenWidth * 3) / 4;
+				height = g_rScreenHeight;
+				resize(width, height);
+			}
+#endif
+
 			//        checkScreenshot();	// 4J - removed
 
 			/* 4J - removed
@@ -2081,13 +2119,14 @@ void Minecraft::run_middle()
 			pause = app.IsAppPaused();
 
 #ifndef _CONTENT_PACKAGE
-			while (System::nanoTime() >= lastTime + 1000000000)
+			const int64_t fpsNow = System::nanoTime();
+			if (fpsNow - lastTime >= kFpsUpdateIntervalNs)
 			{
 				MemSect(31);
-				fpsString = std::to_wstring(frames) + L" fps (" + std::to_wstring(Chunk::updates) + L" chunk updates)";
+				updateFpsStrings(frames, Chunk::updates, fpsNow - lastTime);
 				MemSect(0);
 				Chunk::updates = 0;
-				lastTime += 1000000000;
+				lastTime = fpsNow;
 				frames = 0;
 			}
 #endif
@@ -2129,6 +2168,29 @@ void Minecraft::emergencySave()
 	AABB::clearPool();
 	Vec3::clearPool();
 	setLevel(nullptr);
+}
+
+void Minecraft::updateFpsStrings(int frameCount, int chunkUpdateCount, int64_t elapsedNs)
+{
+	if (elapsedNs <= 0)
+	{
+		elapsedNs = 1;
+	}
+
+	const int displayedFps = static_cast<int>((static_cast<int64_t>(frameCount) * 1000000000LL + (elapsedNs / 2)) / elapsedNs);
+	fpsString = std::to_wstring(displayedFps) + L" fps (" + std::to_wstring(chunkUpdateCount) + L" chunk updates)";
+	const double averageFrameMs = frameCount > 0 ? static_cast<double>(elapsedNs) / static_cast<double>(frameCount) / 1000000.0 : 0.0;
+	wchar_t buffer[128];
+	swprintf(buffer, 128, L"%d FPS | %.2f ms | %d chunk updates", displayedFps, averageFrameMs, chunkUpdateCount);
+	fpsOverlayString = buffer;
+}
+
+void Minecraft::applyConfiguredCustomSkin(const std::shared_ptr<Player>& player)
+{
+	if (customSkinManager != nullptr)
+	{
+		customSkinManager->applyToPlayer(player);
+	}
 }
 
 void Minecraft::renderFpsMeter(int64_t tickTime)
@@ -2244,7 +2306,7 @@ void Minecraft::resize(int width, int height)
 		ScreenSizeCalculator ssc(options, width, height);
 		int screenWidth = ssc.getWidth();
 		int screenHeight = ssc.getHeight();
-		//        screen->init(this, screenWidth, screenHeight);	// 4J - TODO - put back in
+		screen->init(this, screenWidth, screenHeight);
 	}
 }
 
@@ -3952,6 +4014,10 @@ void Minecraft::tick(bool bFirst, bool bUpdateTextures)
 					if (Keyboard.getEventKey() == Keyboard.KEY_F3) {
 						options.renderDebug = !options.renderDebug;
 					}
+					if (Keyboard.getEventKey() == Keyboard.KEY_F4) {
+						options.showFpsOverlay = !options.showFpsOverlay;
+						options.save();
+					}
 					if (Keyboard.getEventKey() == Keyboard.KEY_F5) {
 						options.thirdPersonView = !options.thirdPersonView;
 					}
@@ -4394,6 +4460,7 @@ void Minecraft::setLevel(MultiPlayerLevel *level, int message /*=-1*/, shared_pt
 			gameMode->initPlayer(player);
 
 			player->SetXboxPad(iPrimaryPlayer);
+			applyConfiguredCustomSkin(player);
 
 			for(int i=0;i<XUSER_MAX_COUNT;i++)
 			{
@@ -4588,6 +4655,7 @@ void Minecraft::respawnPlayer(int iPad, int dimension, int newEntityId)
 	player->m_iScreenSection = iTempScreenSection;
 	player->setPlayerIndex( localPlayer->getPlayerIndex() );
 	player->setCustomSkin(localPlayer->getCustomSkin());
+	applyConfiguredCustomSkin(player);
 	player->setPlayerDefaultSkin( skin );
 	player->setCustomCape(localPlayer->getCustomCape());
 	player->m_sessionTimeStart = localPlayer->m_sessionTimeStart;
@@ -5260,4 +5328,3 @@ int Minecraft::MustSignInReturnedPSN(void *pParam, int iPad, C4JStorage::EMessag
 	return 0;
 }
 #endif
-

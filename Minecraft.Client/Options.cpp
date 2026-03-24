@@ -14,8 +14,87 @@
 #include "..\\Minecraft.World\\DataOutputStream.h"
 #include "..\\Minecraft.World\\StringHelpers.h"
 
+namespace
+{
+	constexpr int kMinViewDistance = -2;
+	constexpr int kMaxViewDistance = 3;
+	constexpr size_t kMinPlayerNameLength = 3;
+	constexpr size_t kMaxPlayerNameLength = 16;
+	struct WindowedResolutionPreset
+	{
+		int width;
+		int height;
+		const wchar_t* label;
+	};
+
+	constexpr WindowedResolutionPreset kWindowedResolutionPresets[] =
+	{
+		{ 0, 0, L"Current" },
+		{ 1280, 720, L"1280x720" },
+		{ 1600, 900, L"1600x900" },
+		{ 1920, 1080, L"1920x1080" },
+	};
+
+	int ClampWindowedResolutionIndex(int value)
+	{
+		const int maxIndex = static_cast<int>(sizeof(kWindowedResolutionPresets) / sizeof(kWindowedResolutionPresets[0])) - 1;
+		if (value < 0) return 0;
+		if (value > maxIndex) return maxIndex;
+		return value;
+	}
+
+	int WrapWindowedResolutionIndex(int value)
+	{
+		const int count = static_cast<int>(sizeof(kWindowedResolutionPresets) / sizeof(kWindowedResolutionPresets[0]));
+		while (value < 0) value += count;
+		while (value >= count) value -= count;
+		return value;
+	}
+
+	int ClampViewDistance(int value)
+	{
+		if (value < kMinViewDistance) return kMinViewDistance;
+		if (value > kMaxViewDistance) return kMaxViewDistance;
+		return value;
+	}
+
+	int WrapViewDistance(int value)
+	{
+		const int range = (kMaxViewDistance - kMinViewDistance) + 1;
+		while (value < kMinViewDistance) value += range;
+		while (value > kMaxViewDistance) value -= range;
+		return value;
+	}
+
+	int ViewDistanceToChunks(int viewDistance)
+	{
+		const int clamped = ClampViewDistance(viewDistance);
+		return clamped >= 0 ? (16 >> clamped) : (16 << (-clamped));
+	}
+
+	std::wstring GetRenderDistanceLabel(Language *language, int viewDistance, const std::wstring renderDistanceNames[])
+	{
+		const int clamped = ClampViewDistance(viewDistance);
+		std::wstring label = language->getElement(clamped >= 0 ? renderDistanceNames[clamped] : renderDistanceNames[0]);
+		for (int i = 0; i < -clamped; ++i)
+		{
+			label += L"+";
+		}
+
+		return label + L" (" + std::to_wstring(ViewDistanceToChunks(clamped)) + L" chunks)";
+	}
+
+	bool IsSafePlayerNameChar(wchar_t ch)
+	{
+		return (ch >= L'a' && ch <= L'z')
+			|| (ch >= L'A' && ch <= L'Z')
+			|| (ch >= L'0' && ch <= L'9')
+			|| ch == L'_';
+	}
+}
+
 // 4J - the Option sub-class used to be an java enumerated type, trying to emulate that functionality here
-const Options::Option Options::Option::options[17] =
+const Options::Option Options::Option::options[18] =
 {
 	Options::Option(L"options.music", true, false),
 	Options::Option(L"options.sound", true, false),
@@ -34,6 +113,7 @@ const Options::Option Options::Option::options[17] =
 	Options::Option(L"options.gamma", true, false),
 	Options::Option(L"options.renderClouds", false, true),
 	Options::Option(L"options.particles", false, false),
+	Options::Option(L"options.showFps", false, true),
 };
 
 const Options::Option *Options::Option::MUSIC = &Options::Option::options[0];
@@ -53,6 +133,7 @@ const Options::Option *Options::Option::FOV = &Options::Option::options[13];
 const Options::Option *Options::Option::GAMMA = &Options::Option::options[14];
 const Options::Option *Options::Option::RENDER_CLOUDS = &Options::Option::options[15];
 const Options::Option *Options::Option::PARTICLES = &Options::Option::options[16];
+const Options::Option *Options::Option::SHOW_FPS = &Options::Option::options[17];
 
 const Options::Option *Options::Option::getItem(int id)
 {
@@ -173,6 +254,10 @@ void Options::init()
 	particles = 0;
 	fov = 0.0f;
 	gamma = 0.0f;
+	showFpsOverlay = false;
+	customSkinPath = L"custom_skin.png";
+	windowedResolution = 0;
+	playerName = L"Player";
 }
 
 Options::Options(Minecraft *minecraft, File workingDirectory)
@@ -180,6 +265,7 @@ Options::Options(Minecraft *minecraft, File workingDirectory)
 	init();
 	this->minecraft = minecraft;
 	optionsFile = File(workingDirectory, L"options.txt");
+	load();
 }
 
 Options::Options()
@@ -261,21 +347,39 @@ void Options::set(const Options::Option *item, float fVal)
 
 	if (item == Option::RENDER_DISTANCE)
 	{
-		if (fVal < 0.0f) fVal = 0.0f;
-		if (fVal > 3.0f) fVal = 3.0f;
-		viewDistance = static_cast<int>(fVal);
+		const int newViewDistance = ClampViewDistance(static_cast<int>(fVal));
+		if (viewDistance != newViewDistance)
+		{
+			viewDistance = newViewDistance;
+			if (minecraft != nullptr && minecraft->levelRenderer != nullptr)
+			{
+				minecraft->levelRenderer->allChanged();
+			}
+		}
 	}
 }
 
 void Options::toggle(const Options::Option *option, int dir)
 {
 	if (option == Option::INVERT_MOUSE) invertYMouse = !invertYMouse;
-	if (option == Option::RENDER_DISTANCE) viewDistance = (viewDistance + dir) & 3;
+	if (option == Option::RENDER_DISTANCE)
+	{
+		const int newViewDistance = WrapViewDistance(viewDistance + dir);
+		if (viewDistance != newViewDistance)
+		{
+			viewDistance = newViewDistance;
+			if (minecraft != nullptr && minecraft->levelRenderer != nullptr)
+			{
+				minecraft->levelRenderer->allChanged();
+			}
+		}
+	}
 	if (option == Option::GUI_SCALE) guiScale = (guiScale + dir) & 3;
-	if (option == Option::PARTICLES) particles = (particles + dir) % 3;
+	if (option == Option::PARTICLES) particles = (particles + dir + 3) % 3;
 
-	if (option == Option::VIEW_BOBBING) ((dir == 0) ? bobView = false : bobView = true);
+	if (option == Option::VIEW_BOBBING) bobView = !bobView;
 	if (option == Option::RENDER_CLOUDS) renderClouds = !renderClouds;
+	if (option == Option::SHOW_FPS) showFpsOverlay = !showFpsOverlay;
 
 	if (option == Option::ADVANCED_OPENGL)
 	{
@@ -326,6 +430,7 @@ bool Options::getBooleanValue(const Options::Option *item)
 	if (item == Option::ADVANCED_OPENGL) return advancedOpengl;
 	if (item == Option::AMBIENT_OCCLUSION) return ambientOcclusion;
 	if (item == Option::RENDER_CLOUDS) return renderClouds;
+	if (item == Option::SHOW_FPS) return showFpsOverlay;
 	return false;
 }
 
@@ -333,6 +438,7 @@ wstring Options::getMessage(const Options::Option *item)
 {
 	Language *language = Language::getInstance();
 	wstring caption = language->getElement(item->getCaptionId()) + L": ";
+	if (item == Option::SHOW_FPS) caption = L"FPS Overlay: ";
 
 	if (item->isProgress())
 	{
@@ -394,7 +500,7 @@ wstring Options::getMessage(const Options::Option *item)
 	}
 	else if (item == Option::RENDER_DISTANCE)
 	{
-		return caption + language->getElement(RENDER_DISTANCE_NAMES[viewDistance]);
+		return caption + GetRenderDistanceLabel(language, viewDistance, RENDER_DISTANCE_NAMES);
 	}
 	else if (item == Option::DIFFICULTY)
 	{
@@ -467,6 +573,10 @@ void Options::load()
 		if (cmds[0] == L"fancyGraphics") fancyGraphics = (cmds[1] == L"true");
 		if (cmds[0] == L"ao") ambientOcclusion = (cmds[1] == L"true");
 		if (cmds[0] == L"clouds") renderClouds = (cmds[1] == L"true");
+		if (cmds[0] == L"showFpsOverlay") showFpsOverlay = (cmds[1] == L"true");
+		if (cmds[0] == L"customSkinPath") customSkinPath = cmds[1];
+		if (cmds[0] == L"windowedResolution") windowedResolution = _fromString<int>(cmds[1]);
+		if (cmds[0] == L"playerName") playerName = cmds[1];
 		if (cmds[0] == L"skin") skin = cmds[1];
 		if (cmds[0] == L"lastServer") lastMpIp = cmds[1];
 
@@ -496,8 +606,7 @@ void Options::load()
 	if (gamma < 0.0f) gamma = 0.0f;
 	if (gamma > 1.0f) gamma = 1.0f;
 
-	if (viewDistance < 0) viewDistance = 0;
-	if (viewDistance > 3) viewDistance = 3;
+	viewDistance = ClampViewDistance(viewDistance);
 
 	if (guiScale < 0) guiScale = 0;
 	if (guiScale > 3) guiScale = 3;
@@ -510,6 +619,9 @@ void Options::load()
 
 	if (difficulty < 0) difficulty = 0;
 	if (difficulty > 3) difficulty = 3;
+
+	windowedResolution = ClampWindowedResolutionIndex(windowedResolution);
+	playerName = NormalizePlayerName(playerName);
 }
 
 float Options::readFloat(wstring string)
@@ -541,6 +653,10 @@ void Options::save()
 	dos.writeChars(L"fancyGraphics:" + wstring(fancyGraphics ? L"true" : L"false") + L"\n");
 	dos.writeChars(ambientOcclusion ? L"ao:true\n" : L"ao:false\n");
 	dos.writeChars(renderClouds ? L"clouds:true\n" : L"clouds:false\n");
+	dos.writeChars(showFpsOverlay ? L"showFpsOverlay:true\n" : L"showFpsOverlay:false\n");
+	dos.writeChars(L"customSkinPath:" + customSkinPath + L"\n");
+	dos.writeChars(L"windowedResolution:" + std::to_wstring(windowedResolution) + L"\n");
+	dos.writeChars(L"playerName:" + NormalizePlayerName(playerName) + L"\n");
 	dos.writeChars(L"skin:" + skin + L"\n");
 	dos.writeChars(L"lastServer:" + lastMpIp + L"\n");
 
@@ -555,4 +671,75 @@ void Options::save()
 bool Options::isCloudsOn()
 {
 	return viewDistance < 2 && renderClouds;
+}
+
+wstring Options::getWindowedResolutionMessage() const
+{
+	return std::wstring(L"Window Size: ") + kWindowedResolutionPresets[ClampWindowedResolutionIndex(windowedResolution)].label;
+}
+
+bool Options::cycleWindowedResolution(int dir)
+{
+	const int newValue = WrapWindowedResolutionIndex(windowedResolution + dir);
+	if (newValue == windowedResolution)
+	{
+		return false;
+	}
+
+	windowedResolution = newValue;
+	return applyWindowedResolution();
+}
+
+bool Options::applyWindowedResolution() const
+{
+#ifdef _WINDOWS64
+	extern bool SetWindowedClientSize(int clientWidth, int clientHeight);
+	const WindowedResolutionPreset& preset = kWindowedResolutionPresets[ClampWindowedResolutionIndex(windowedResolution)];
+	if (preset.width <= 0 || preset.height <= 0)
+	{
+		return true;
+	}
+	return SetWindowedClientSize(preset.width, preset.height);
+#else
+	return false;
+#endif
+}
+
+bool Options::IsValidPlayerName(const std::wstring& value)
+{
+	if (value.length() < kMinPlayerNameLength || value.length() > kMaxPlayerNameLength)
+	{
+		return false;
+	}
+
+	for (size_t i = 0; i < value.length(); ++i)
+	{
+		if (!IsSafePlayerNameChar(value[i]))
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+std::wstring Options::NormalizePlayerName(const std::wstring& rawValue)
+{
+	std::wstring result;
+	result.reserve(kMaxPlayerNameLength);
+
+	for (size_t i = 0; i < rawValue.length() && result.length() < kMaxPlayerNameLength; ++i)
+	{
+		if (IsSafePlayerNameChar(rawValue[i]))
+		{
+			result.push_back(rawValue[i]);
+		}
+	}
+
+	if (result.length() < kMinPlayerNameLength)
+	{
+		return L"Player";
+	}
+
+	return result;
 }

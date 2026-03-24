@@ -1070,9 +1070,12 @@ void Gui::render(float a, bool mouseFree, int xMouse, int yMouse)
             lines.push_back(ClientConstants::VERSION_STRING);
             lines.push_back(ClientConstants::BRANCH_STRING);
         }
+        if (minecraft->options->showFpsOverlay || minecraft->options->renderDebug)
+        {
+            lines.push_back(minecraft->options->renderDebug ? minecraft->fpsString : minecraft->fpsOverlayString);
+        }
         if (minecraft->options->renderDebug && minecraft->player != nullptr && minecraft->level != nullptr)
         {
-            lines.push_back(minecraft->fpsString);
             lines.push_back(L"E: " + std::to_wstring(minecraft->level->getAllEntities().size()));
             int renderDistance = app.GetGameSettings(iPad, eGameSetting_RenderDistance);
             lines.push_back(L"C: " + std::to_wstring(16 * (2 * renderDistance + 1) * (2 * renderDistance + 1)) + L" D: " + std::to_wstring(renderDistance));

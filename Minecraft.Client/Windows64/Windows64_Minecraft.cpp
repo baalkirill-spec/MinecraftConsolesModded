@@ -137,19 +137,19 @@ static void CopyWideArgToAnsi(LPCWSTR source, char* dest, size_t destSize)
 	dest[destSize - 1] = 0;
 }
 
-// ---------- Persistent options (options.txt next to exe) ----------
-static void GetOptionsFilePath(char *out, size_t outSize)
+// ---------- Persistent window settings (kept separate from Options::options.txt) ----------
+static void GetWindowSettingsFilePath(char *out, size_t outSize)
 {
 	GetModuleFileNameA(nullptr, out, static_cast<DWORD>(outSize));
 	char *p = strrchr(out, '\\');
 	if (p) *(p + 1) = '\0';
-	strncat_s(out, outSize, "options.txt", _TRUNCATE);
+	strncat_s(out, outSize, "window_settings.txt", _TRUNCATE);
 }
 
 static void SaveFullscreenOption(bool fullscreen)
 {
 	char path[MAX_PATH];
-	GetOptionsFilePath(path, sizeof(path));
+	GetWindowSettingsFilePath(path, sizeof(path));
 	FILE *f = nullptr;
 	if (fopen_s(&f, path, "w") == 0 && f)
 	{
@@ -161,7 +161,7 @@ static void SaveFullscreenOption(bool fullscreen)
 static bool LoadFullscreenOption()
 {
 	char path[MAX_PATH];
-	GetOptionsFilePath(path, sizeof(path));
+	GetWindowSettingsFilePath(path, sizeof(path));
 	FILE *f = nullptr;
 	if (fopen_s(&f, path, "r") == 0 && f)
 	{
@@ -1216,6 +1216,63 @@ void ToggleFullscreen()
 
 	if (g_KBMInput.IsWindowFocused())
 		g_KBMInput.SetWindowFocused(true);
+}
+
+bool SetWindowedClientSize(int clientWidth, int clientHeight)
+{
+	if (g_hWnd == nullptr || g_isFullscreen || clientWidth <= 0 || clientHeight <= 0)
+	{
+		return false;
+	}
+
+	RECT workArea = {};
+	MONITORINFO monitorInfo = { sizeof(monitorInfo) };
+	if (GetMonitorInfo(MonitorFromWindow(g_hWnd, MONITOR_DEFAULTTONEAREST), &monitorInfo))
+	{
+		workArea = monitorInfo.rcWork;
+	}
+	else
+	{
+		workArea.left = 0;
+		workArea.top = 0;
+		workArea.right = GetSystemMetrics(SM_CXSCREEN);
+		workArea.bottom = GetSystemMetrics(SM_CYSCREEN);
+	}
+
+	clientWidth = min(clientWidth, workArea.right - workArea.left);
+	clientHeight = min(clientHeight, workArea.bottom - workArea.top);
+
+	RECT windowRect = { 0, 0, clientWidth, clientHeight };
+	const DWORD style = GetWindowLong(g_hWnd, GWL_STYLE);
+	AdjustWindowRect(&windowRect, style, FALSE);
+
+	const int windowWidth = windowRect.right - windowRect.left;
+	const int windowHeight = windowRect.bottom - windowRect.top;
+
+	RECT currentRect = {};
+	GetWindowRect(g_hWnd, &currentRect);
+
+	int x = currentRect.left;
+	int y = currentRect.top;
+	if (x + windowWidth > workArea.right)
+	{
+		x = workArea.right - windowWidth;
+	}
+	if (y + windowHeight > workArea.bottom)
+	{
+		y = workArea.bottom - windowHeight;
+	}
+	if (x < workArea.left)
+	{
+		x = workArea.left;
+	}
+	if (y < workArea.top)
+	{
+		y = workArea.top;
+	}
+
+	return SetWindowPos(g_hWnd, nullptr, x, y, windowWidth, windowHeight,
+		SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED) == TRUE;
 }
 
 //--------------------------------------------------------------------------------------

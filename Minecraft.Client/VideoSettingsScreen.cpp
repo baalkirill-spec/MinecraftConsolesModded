@@ -6,6 +6,12 @@
 #include "ControlsScreen.h"
 #include "..\\Minecraft.World\\net.minecraft.locale.h"
 
+namespace
+{
+	constexpr int kButtonDone = 200;
+	constexpr int kButtonWindowedResolution = 201;
+}
+
 VideoSettingsScreen::VideoSettingsScreen(Screen *lastScreen, Options *options)
 {
 	this->title = L"Video Settings"; // 4J - added
@@ -18,20 +24,23 @@ void VideoSettingsScreen::init()
     Language *language = Language::getInstance();
     this->title = language->getElement(L"options.videoTitle");
 
-	// Добавили FOV в список
-	const Options::Option *items[9] = {
+	const Options::Option *items[] = {
 		Options::Option::GRAPHICS,
 		Options::Option::RENDER_DISTANCE,
 		Options::Option::FOV,
+		Options::Option::GAMMA,
 		Options::Option::AMBIENT_OCCLUSION,
-		Options::Option::FRAMERATE_LIMIT,
-		Options::Option::ANAGLYPH,
+		Options::Option::RENDER_CLOUDS,
 		Options::Option::VIEW_BOBBING,
+		Options::Option::PARTICLES,
 		Options::Option::GUI_SCALE,
+		Options::Option::FRAMERATE_LIMIT,
+		Options::Option::SHOW_FPS,
 		Options::Option::ADVANCED_OPENGL
 	};
 
-	for (int position = 0; position < 9; position++)
+	const int itemCount = static_cast<int>(sizeof(items) / sizeof(items[0]));
+	for (int position = 0; position < itemCount; position++)
 	{
 		const Options::Option *item = items[position];
         if (!item->isProgress())
@@ -57,12 +66,27 @@ void VideoSettingsScreen::init()
         }
     }
 
-    buttons.push_back(new Button(
-        200,
-        width / 2 - 100,
-        height / 6 + 24 * 8,
-        language->getElement(L"gui.done")
-    ));
+#ifdef _WINDOWS64
+	buttons.push_back(new Button(
+		kButtonWindowedResolution,
+		width / 2 - 100,
+		height / 6 + 24 * ((itemCount + 1) >> 1) + 12,
+		options->getWindowedResolutionMessage()
+	));
+	buttons.push_back(new Button(
+		kButtonDone,
+		width / 2 - 100,
+		height / 6 + 24 * ((itemCount + 3) >> 1) + 16,
+		language->getElement(L"gui.done")
+	));
+#else
+	buttons.push_back(new Button(
+		kButtonDone,
+		width / 2 - 100,
+		height / 6 + 24 * ((itemCount + 1) >> 1) + 12,
+		language->getElement(L"gui.done")
+	));
+#endif
 }
 
 void VideoSettingsScreen::buttonClicked(Button *button)
@@ -75,7 +99,14 @@ void VideoSettingsScreen::buttonClicked(Button *button)
         button->msg = options->getMessage(Options::Option::getItem(button->id));
     }
 
-    if (button->id == 200)
+	if (button->id == kButtonWindowedResolution)
+	{
+		options->cycleWindowedResolution(1);
+		button->msg = options->getWindowedResolutionMessage();
+		minecraft->options->save();
+	}
+
+    if (button->id == kButtonDone)
 	{
         minecraft->options->save();
         minecraft->setScreen(lastScreen);
